@@ -5,14 +5,15 @@ import NukeUI
 import PhotosUI
 import SwiftUI
 
+@MainActor
 struct StatusEditorAccessoryView: View {
-  @EnvironmentObject private var preferences: UserPreferences
-  @EnvironmentObject private var theme: Theme
-  @EnvironmentObject private var currentInstance: CurrentInstance
+  @Environment(UserPreferences.self) private var preferences
+  @Environment(Theme.self) private var theme
+  @Environment(CurrentInstance.self) private var currentInstance
   @Environment(\.colorScheme) private var colorScheme
 
   @FocusState<Bool>.Binding var isSpoilerTextFocused: Bool
-  @ObservedObject var viewModel: StatusEditorViewModel
+  var viewModel: StatusEditorViewModel
 
   @State private var isDraftsSheetDisplayed: Bool = false
   @State private var isLanguageSheetDisplayed: Bool = false
@@ -24,6 +25,7 @@ struct StatusEditorAccessoryView: View {
   @State private var isCameraPickerPresented: Bool = false
 
   var body: some View {
+    @Bindable var viewModel = viewModel
     VStack(spacing: 0) {
       Divider()
       HStack {
@@ -35,7 +37,7 @@ struct StatusEditorAccessoryView: View {
               } label: {
                 Label("status.editor.photo-library", systemImage: "photo")
               }
-              if !ProcessInfo.processInfo.isiOSAppOnMac {
+              if !ProcessInfo.processInfo.isMacCatalystApp {
                 Button {
                   isCameraPickerPresented = true
                 } label: {
@@ -107,9 +109,18 @@ struct StatusEditorAccessoryView: View {
                 Image(systemName: "archivebox")
               }
               .accessibilityLabel("accessibility.editor.button.drafts")
+              .popover(isPresented: $isDraftsSheetDisplayed) {
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                  draftsListView
+                    .presentationDetents([.medium])
+                } else {
+                  draftsListView
+                    .frame(width: 400, height: 500)
+                }
+              }
             }
 
-            if !viewModel.customEmojis.isEmpty {
+            if !viewModel.customEmojiContainer.isEmpty {
               Button {
                 isCustomEmojisSheetDisplay = true
               } label: {
@@ -119,6 +130,14 @@ struct StatusEditorAccessoryView: View {
                 Image(systemName: customEmojiSheetIconName)
               }
               .accessibilityLabel("accessibility.editor.button.custom-emojis")
+              .popover(isPresented: $isCustomEmojisSheetDisplay) {
+                if UIDevice.current.userInterfaceIdiom == .phone {
+                  customEmojisSheet
+                } else {
+                  customEmojisSheet
+                    .frame(width: 400, height: 500)
+                }
+              }
             }
 
             Button {
@@ -131,6 +150,14 @@ struct StatusEditorAccessoryView: View {
               }
             }
             .accessibilityLabel("accessibility.editor.button.language")
+            .popover(isPresented: $isLanguageSheetDisplayed) {
+              if UIDevice.current.userInterfaceIdiom == .phone {
+                languageSheetView
+              } else {
+                languageSheetView
+                  .frame(width: 400, height: 500)
+              }
+            }
 
             if preferences.isOpenAIEnabled {
               AIMenu.disabled(!viewModel.canPost)
@@ -146,23 +173,24 @@ struct StatusEditorAccessoryView: View {
       .padding(.vertical, 12)
       .background(.ultraThinMaterial)
     }
-    .sheet(isPresented: $isDraftsSheetDisplayed) {
-      draftsSheetView
-    }
-    .sheet(isPresented: $isLanguageSheetDisplayed) {
-      languageSheetView
-    }
-    .sheet(isPresented: $isCustomEmojisSheetDisplay) {
-      customEmojisSheet
-    }
     .onAppear {
       viewModel.setInitialLanguageSelection(preference: preferences.recentlyUsedLanguages.first ?? preferences.serverPreferences?.postLanguage)
     }
   }
 
+  private var draftsListView: some View {
+    DraftsListView(selectedDraft: .init(get: {
+      nil
+    }, set: { draft in
+      if let draft {
+        viewModel.insertStatusText(text: draft.content)
+      }
+    }))
+  }
+
   @ViewBuilder
   private func languageTextView(isoCode: String, nativeName: String?, name: String?) -> some View {
-    if let nativeName = nativeName, let name = name {
+    if let nativeName, let name {
       Text("\(nativeName) (\(name))")
     } else {
       Text(isoCode.uppercased())
@@ -252,63 +280,40 @@ struct StatusEditorAccessoryView: View {
     }
   }
 
-  private var draftsSheetView: some View {
-    NavigationStack {
-      List {
-        ForEach(preferences.draftsPosts, id: \.self) { draft in
-          Button {
-            viewModel.insertStatusText(text: draft)
-            isDraftsSheetDisplayed = false
-          } label: {
-            Text(draft)
-              .lineLimit(3)
-          }.listRowBackground(theme.primaryBackgroundColor)
-        }
-        .onDelete { indexes in
-          if let index = indexes.first {
-            preferences.draftsPosts.remove(at: index)
-          }
-        }
-      }
-      .toolbar {
-        ToolbarItem(placement: .navigationBarLeading) {
-          Button("action.cancel", action: { isDraftsSheetDisplayed = false })
-        }
-      }
-      .scrollContentBackground(.hidden)
-      .background(theme.secondaryBackgroundColor)
-      .navigationTitle("status.editor.drafts.navigation-title")
-      .navigationBarTitleDisplayMode(.inline)
-    }
-    .presentationDetents([.medium])
-  }
-
   private var customEmojisSheet: some View {
     NavigationStack {
       ScrollView {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 40))], spacing: 9) {
-          ForEach(viewModel.customEmojis) { emoji in
-            LazyImage(url: emoji.url) { state in
-              if let image = state.image {
-                image
-                  .resizable()
-                  .aspectRatio(contentMode: .fill)
-                  .frame(width: 40, height: 40)
-                  .accessibilityLabel(emoji.shortcode.replacingOccurrences(of: "_", with: " "))
-                  .accessibilityAddTraits(.isButton)
-              } else if state.isLoading {
-                Rectangle()
-                  .fill(Color.gray)
-                  .frame(width: 40, height: 40)
-                  .accessibility(hidden: true)
-                  .shimmering()
+        ForEach(viewModel.customEmojiContainer) { container in
+          VStack(alignment: .leading) {
+            Text(container.categoryName)
+              .font(.scaledFootnote)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 40))], spacing: 9) {
+              ForEach(container.emojis) { emoji in
+                LazyImage(url: emoji.url) { state in
+                  if let image = state.image {
+                    image
+                      .resizable()
+                      .aspectRatio(contentMode: .fill)
+                      .frame(width: 40, height: 40)
+                      .accessibilityLabel(emoji.shortcode.replacingOccurrences(of: "_", with: " "))
+                      .accessibilityAddTraits(.isButton)
+                  } else if state.isLoading {
+                    Rectangle()
+                      .fill(Color.gray)
+                      .frame(width: 40, height: 40)
+                      .accessibility(hidden: true)
+                      .shimmering()
+                  }
+                }
+                .onTapGesture {
+                  viewModel.insertStatusText(text: " :\(emoji.shortcode): ")
+                }
               }
             }
-            .onTapGesture {
-              viewModel.insertStatusText(text: " :\(emoji.shortcode): ")
-            }
           }
-        }.padding(.horizontal)
+          .padding(.horizontal)
+          .padding(.bottom)
+        }
       }
       .toolbar {
         ToolbarItem(placement: .navigationBarLeading) {

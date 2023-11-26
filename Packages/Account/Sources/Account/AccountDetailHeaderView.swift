@@ -6,19 +6,21 @@ import NukeUI
 import Shimmer
 import SwiftUI
 
+@MainActor
 struct AccountDetailHeaderView: View {
   enum Constants {
     static let headerHeight: CGFloat = 200
   }
 
-  @EnvironmentObject private var theme: Theme
-  @EnvironmentObject private var quickLook: QuickLook
-  @EnvironmentObject private var routerPath: RouterPath
-  @EnvironmentObject private var currentAccount: CurrentAccount
+  @Environment(\.openWindow) private var openWindow
+  @Environment(Theme.self) private var theme
+  @Environment(QuickLook.self) private var quickLook
+  @Environment(RouterPath.self) private var routerPath
+  @Environment(CurrentAccount.self) private var currentAccount
   @Environment(\.redactionReasons) private var reasons
   @Environment(\.isSupporter) private var isSupporter: Bool
 
-  @ObservedObject var viewModel: AccountDetailViewModel
+  var viewModel: AccountDetailViewModel
   let account: Account
   let scrollViewProxy: ScrollViewProxy?
 
@@ -78,8 +80,13 @@ struct AccountDetailHeaderView: View {
       guard account.haveHeader else {
         return
       }
-      Task {
-        await quickLook.prepareFor(urls: [account.header], selectedURL: account.header)
+      let attachement = MediaAttachment.imageWith(url: account.header)
+
+      if ProcessInfo.processInfo.isMacCatalystApp {
+        openWindow(value: WindowDestinationMedia.mediaViewer(attachments: [attachement],
+                                                        selectedAttachment: attachement))
+      } else {
+        quickLook.prepareFor(selectedMediaAttachment: attachement, mediaAttachments: [attachement])
       }
     }
     .accessibilityElement(children: .combine)
@@ -92,7 +99,7 @@ struct AccountDetailHeaderView: View {
   private var accountAvatarView: some View {
     HStack {
       ZStack(alignment: .topTrailing) {
-        AvatarView(url: account.avatar, size: .account)
+        AvatarView(account: account, config: .account)
           .accessibilityLabel("accessibility.tabs.profile.user-avatar.label")
         if viewModel.isCurrentUser, isSupporter {
           Image(systemName: "checkmark.seal.fill")
@@ -109,8 +116,12 @@ struct AccountDetailHeaderView: View {
         guard account.haveAvatar else {
           return
         }
-        Task {
-          await quickLook.prepareFor(urls: [account.avatar], selectedURL: account.avatar)
+        let attachement = MediaAttachment.imageWith(url: account.avatar)
+        if ProcessInfo.processInfo.isMacCatalystApp {
+          openWindow(value: WindowDestinationMedia.mediaViewer(attachments: [attachement],
+                                                          selectedAttachment: attachement))
+        } else {
+          quickLook.prepareFor(selectedMediaAttachment: attachement, mediaAttachments: [attachement])
         }
       }
       .accessibilityElement(children: .combine)
@@ -324,7 +335,9 @@ struct AccountDetailHeaderView: View {
         ForEach(viewModel.fields) { field in
           HStack {
             VStack(alignment: .leading, spacing: 2) {
-              Text(field.name)
+              EmojiTextApp(.init(stringValue: field.name), emojis: viewModel.account?.emojis ?? [])
+                .emojiSize(Font.scaledHeadlineFont.emojiSize)
+                .emojiBaselineOffset(Font.scaledHeadlineFont.emojiBaselineOffset)
                 .font(.scaledHeadline)
               HStack {
                 if field.verifiedAt != nil {

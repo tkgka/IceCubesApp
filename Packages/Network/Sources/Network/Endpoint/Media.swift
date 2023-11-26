@@ -2,26 +2,35 @@ import Foundation
 
 public enum Media: Endpoint {
   case medias
-  case media(id: String, description: String?)
+  case media(id: String, json: MediaDescriptionData)
 
   public func path() -> String {
     switch self {
     case .medias:
-      return "media"
+      "media"
     case let .media(id, _):
-      return "media/\(id)"
+      "media/\(id)"
     }
   }
 
   public func queryItems() -> [URLQueryItem]? {
+    nil
+  }
+
+  public var jsonValue: Encodable? {
     switch self {
-    case let .media(_, description):
-      if let description {
-        return [.init(name: "description", value: description)]
-      }
-      return nil
+    case let .media(_, json):
+      json
     default:
-      return nil
+      nil
     }
+  }
+}
+
+public struct MediaDescriptionData: Encodable, Sendable {
+  public let description: String?
+
+  public init(description: String?) {
+    self.description = description
   }
 }

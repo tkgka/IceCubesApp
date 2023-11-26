@@ -1,14 +1,15 @@
 import Env
 import Models
 import Network
+import Observation
 import Status
 import SwiftUI
 
 @MainActor
-class TimelineViewModel: ObservableObject {
-  @Published var scrollToIndex: Int?
-  @Published var statusesState: StatusesState = .loading
-  @Published var timeline: TimelineFilter = .federated {
+@Observable class TimelineViewModel {
+  var scrollToIndex: Int?
+  var statusesState: StatusesState = .loading
+  var timeline: TimelineFilter = .federated {
     didSet {
       timelineTask?.cancel()
       timelineTask = Task {
@@ -39,11 +40,11 @@ class TimelineViewModel: ObservableObject {
 
   private var timelineTask: Task<Void, Never>?
 
-  @Published var tag: Tag?
+  var tag: Tag?
 
   // Internal source of truth for a timeline.
   private var datasource = TimelineDatasource()
-  private let cache: TimelineCache = .shared
+  private let cache = TimelineCache()
   private var visibileStatusesIds = Set<String>()
   private var canStreamEvents: Bool = true
 
@@ -163,7 +164,7 @@ extension TimelineViewModel: StatusesFetcher {
     }
     await fetchNewestStatuses()
   }
-  
+
   func refreshTimeline() {
     timelineTask?.cancel()
     timelineTask = Task {
@@ -243,7 +244,7 @@ extension TimelineViewModel: StatusesFetcher {
     var newStatuses: [Status] = await fetchNewPages(minId: latestStatus.id, maxPages: 10)
 
     // Dedup statuses, a status with the same id could have been streamed in.
-    let ids = await datasource.get().map { $0.id }
+    let ids = await datasource.get().map(\.id)
     newStatuses = newStatuses.filter { status in
       !ids.contains(where: { $0 == status.id })
     }
@@ -285,7 +286,7 @@ extension TimelineViewModel: StatusesFetcher {
     await cacheHome()
 
     // Append new statuses in the timeline indicator.
-    pendingStatusesObserver.pendingStatuses.insert(contentsOf: newStatuses.map { $0.id }, at: 0)
+    pendingStatusesObserver.pendingStatuses.insert(contentsOf: newStatuses.map(\.id), at: 0)
 
     // High chance the user is scrolled to the top.
     // We need to update the statuses state, and then scroll to the previous top most status.
@@ -314,8 +315,9 @@ extension TimelineViewModel: StatusesFetcher {
     // If none, it'll stop there.
     // Only do that in the context of the home timeline as other don't worth catching up that much.
     if timeline == .home,
-        !Task.isCancelled,
-        let latest = await datasource.get().first {
+       !Task.isCancelled,
+       let latest = await datasource.get().first
+    {
       try await fetchNewPagesFrom(latestStatus: latest, client: client)
     }
   }

@@ -5,7 +5,7 @@ import Network
 import SwiftUI
 
 @MainActor
-class StatusDetailViewModel: ObservableObject {
+@Observable class StatusDetailViewModel {
   public var statusId: String?
   public var remoteStatusURL: URL?
 
@@ -13,13 +13,16 @@ class StatusDetailViewModel: ObservableObject {
   var routerPath: RouterPath?
 
   enum State {
-    case loading, display(statuses: [Status], date: Date), error(error: Error)
+    case loading, display(statuses: [Status]), error(error: Error)
   }
 
-  @Published var state: State = .loading
-  @Published var isLoadingContext = true
-  @Published var title: LocalizedStringKey = ""
-  @Published var scrollToId: String?
+  var state: State = .loading
+  var title: LocalizedStringKey = ""
+  var scrollToId: String?
+  static var maxIndent = UInt(7)
+
+  @ObservationIgnored
+  var indentationLevelPreviousCache: [String: UInt] = [:]
 
   init(statusId: String) {
     state = .loading
@@ -28,10 +31,13 @@ class StatusDetailViewModel: ObservableObject {
   }
 
   init(status: Status) {
-    state = .display(statuses: [status], date: Date())
+    state = .display(statuses: [status])
     title = "status.post-from-\(status.account.displayNameWithoutEmojis)"
     statusId = status.id
     remoteStatusURL = nil
+    if status.inReplyToId != nil {
+      indentationLevelPreviousCache[status.id] = 1
+    }
   }
 
   init(remoteStatusURL: URL) {
@@ -74,23 +80,20 @@ class StatusDetailViewModel: ObservableObject {
   private func fetchStatusDetail(animate: Bool) async {
     guard let client, let statusId else { return }
     do {
-      isLoadingContext = true
       let data = try await fetchContextData(client: client, statusId: statusId)
       title = "status.post-from-\(data.status.account.displayNameWithoutEmojis)"
       var statuses = data.context.ancestors
       statuses.append(data.status)
       statuses.append(contentsOf: data.context.descendants)
-
+      cacheReplyTopPrevious(statuses: statuses)
       StatusDataControllerProvider.shared.updateDataControllers(for: statuses, client: client)
 
       if animate {
         withAnimation {
-          isLoadingContext = false
-          state = .display(statuses: statuses, date: Date())
+          state = .display(statuses: statuses)
         }
       } else {
-        isLoadingContext = false
-        state = .display(statuses: statuses, date: Date())
+        state = .display(statuses: statuses)
         scrollToId = statusId
       }
     } catch {
@@ -108,6 +111,18 @@ class StatusDetailViewModel: ObservableObject {
     return try await .init(status: status, context: context)
   }
 
+  private func cacheReplyTopPrevious(statuses: [Status]) {
+    indentationLevelPreviousCache = [:]
+    for status in statuses {
+      if let inReplyToId = status.inReplyToId,
+         let prevIndent = indentationLevelPreviousCache[inReplyToId] {
+        indentationLevelPreviousCache[status.id] = prevIndent + 1
+      } else {
+        indentationLevelPreviousCache[status.id] = 0
+      }
+    }
+  }
+
   func handleEvent(event: any StreamEvent, currentAccount: Account?) {
     Task {
       if let event = event as? StreamEventUpdate,
@@ -122,5 +137,15 @@ class StatusDetailViewModel: ObservableObject {
         await fetchStatusDetail(animate: true)
       }
     }
+  }
+  
+  func getIndentationLevel(id: String) -> (indentationLevel: UInt, extraInset: Double) {
+    let level = min(indentationLevelPreviousCache[id] ?? 0, Self.maxIndent)
+    
+    let barSize = Double(level) * 2
+    let spaceBetween = (Double(level) - 1) * 3
+    let size = barSize + spaceBetween + 8
+    
+    return (level, size)
   }
 }

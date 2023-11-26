@@ -9,22 +9,22 @@ public enum RemoteTimelineFilter: String, CaseIterable, Hashable, Equatable {
   public func localizedTitle() -> LocalizedStringKey {
     switch self {
     case .federated:
-      return "timeline.federated"
+      "timeline.federated"
     case .local:
-      return "timeline.local"
+      "timeline.local"
     case .trending:
-      return "timeline.trending"
+      "timeline.trending"
     }
   }
 
   public func iconName() -> String {
     switch self {
     case .federated:
-      return "globe.americas"
+      "globe.americas"
     case .local:
-      return "person.2"
+      "person.2"
     case .trending:
-      return "chart.line.uptrend.xyaxis"
+      "chart.line.uptrend.xyaxis"
     }
   }
 }
@@ -32,6 +32,7 @@ public enum RemoteTimelineFilter: String, CaseIterable, Hashable, Equatable {
 public enum TimelineFilter: Hashable, Equatable {
   case home, local, federated, trending
   case hashtag(tag: String, accountId: String?)
+  case tagGroup(title: String, tags: [String])
   case list(list: Models.List)
   case remoteLocal(server: String, filter: RemoteTimelineFilter)
   case latest
@@ -50,74 +51,78 @@ public enum TimelineFilter: Hashable, Equatable {
   public var supportNewestPagination: Bool {
     switch self {
     case .trending:
-      return false
+      false
     case let .remoteLocal(_, filter):
-      return filter != .trending
+      filter != .trending
     default:
-      return true
+      true
     }
   }
 
   public var title: String {
     switch self {
     case .latest:
-      return "Latest"
+      "Latest"
     case .federated:
-      return "Federated"
+      "Federated"
     case .local:
-      return "Local"
+      "Local"
     case .trending:
-      return "Trending"
+      "Trending"
     case .home:
-      return "Home"
+      "Home"
     case let .hashtag(tag, _):
-      return "#\(tag)"
+      "#\(tag)"
+    case let .tagGroup(title, _):
+      title
     case let .list(list):
-      return list.title
+      list.title
     case let .remoteLocal(server, _):
-      return server
+      server
     }
   }
 
   public func localizedTitle() -> LocalizedStringKey {
     switch self {
     case .latest:
-      return "timeline.latest"
+      "timeline.latest"
     case .federated:
-      return "timeline.federated"
+      "timeline.federated"
     case .local:
-      return "timeline.local"
+      "timeline.local"
     case .trending:
-      return "timeline.trending"
+      "timeline.trending"
     case .home:
-      return "timeline.home"
+      "timeline.home"
     case let .hashtag(tag, _):
-      return "#\(tag)"
+      "#\(tag)"
+    case let .tagGroup(title, _):
+      LocalizedStringKey(title) // ?? not sure since this can't be localized.
     case let .list(list):
-      return LocalizedStringKey(list.title)
+      LocalizedStringKey(list.title)
     case let .remoteLocal(server, _):
-      return LocalizedStringKey(server)
+      LocalizedStringKey(server)
     }
   }
 
   public func iconName() -> String? {
     switch self {
     case .latest:
-      return "arrow.counterclockwise"
+      "arrow.counterclockwise"
     case .federated:
-      return "globe.americas"
+      "globe.americas"
     case .local:
-      return "person.2"
+      "person.2"
     case .trending:
-      return "chart.line.uptrend.xyaxis"
+      "chart.line.uptrend.xyaxis"
     case .home:
-      return "house"
+      "house"
     case .list:
-      return "list.bullet"
+      "list.bullet"
     case .remoteLocal:
-      return "dot.radiowaves.right"
+      "dot.radiowaves.right"
     default:
-      return nil
+      nil
     }
   }
 
@@ -142,8 +147,12 @@ public enum TimelineFilter: Hashable, Equatable {
       if let accountId {
         return Accounts.statuses(id: accountId, sinceId: nil, tag: tag, onlyMedia: nil, excludeReplies: nil, pinned: nil)
       } else {
-        return Timelines.hashtag(tag: tag, maxId: maxId)
+        return Timelines.hashtag(tag: tag, additional: nil, maxId: maxId)
       }
+    case let .tagGroup(_, tags):
+      var tags = tags
+      let tag = tags.removeFirst()
+      return Timelines.hashtag(tag: tag, additional: tags, maxId: maxId)
     }
   }
 }
@@ -155,6 +164,7 @@ extension TimelineFilter: Codable {
     case federated
     case trending
     case hashtag
+    case tagGroup
     case list
     case remoteLocal
     case latest
@@ -179,6 +189,14 @@ extension TimelineFilter: Codable {
       self = .hashtag(
         tag: tag,
         accountId: accountId
+      )
+    case .tagGroup:
+      var nestedContainer = try container.nestedUnkeyedContainer(forKey: .hashtag)
+      let title = try nestedContainer.decode(String.self)
+      let tags = try nestedContainer.decode([String].self)
+      self = .tagGroup(
+        title: title,
+        tags: tags
       )
     case .list:
       let list = try container.decode(
@@ -221,6 +239,10 @@ extension TimelineFilter: Codable {
       var nestedContainer = container.nestedUnkeyedContainer(forKey: .hashtag)
       try nestedContainer.encode(tag)
       try nestedContainer.encode(accountId)
+    case let .tagGroup(title, tags):
+      var nestedContainer = container.nestedUnkeyedContainer(forKey: .tagGroup)
+      try nestedContainer.encode(title)
+      try nestedContainer.encode(tags)
     case let .list(list):
       try container.encode(list, forKey: .list)
     case let .remoteLocal(server, filter):

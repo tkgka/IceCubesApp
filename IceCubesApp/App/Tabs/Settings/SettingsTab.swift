@@ -6,26 +6,34 @@ import Foundation
 import Models
 import Network
 import Nuke
+import SwiftData
 import SwiftUI
 import Timeline
 
+@MainActor
 struct SettingsTabs: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.modelContext) private var context
 
-  @EnvironmentObject private var pushNotifications: PushNotificationsService
-  @EnvironmentObject private var preferences: UserPreferences
-  @EnvironmentObject private var client: Client
-  @EnvironmentObject private var currentInstance: CurrentInstance
-  @EnvironmentObject private var appAccountsManager: AppAccountsManager
-  @EnvironmentObject private var theme: Theme
+  @Environment(PushNotificationsService.self) private var pushNotifications
+  @Environment(UserPreferences.self) private var preferences
+  @Environment(Client.self) private var client
+  @Environment(CurrentInstance.self) private var currentInstance
+  @Environment(AppAccountsManager.self) private var appAccountsManager
+  @Environment(Theme.self) private var theme
 
-  @StateObject private var routerPath = RouterPath()
-
+  @State private var routerPath = RouterPath()
   @State private var addAccountSheetPresented = false
   @State private var isEditingAccount = false
   @State private var cachedRemoved = false
+  @State private var timelineCache = TimelineCache()
 
   @Binding var popToRootTab: Tab
+  
+  let isModal: Bool
+
+  @Query(sort: \LocalTimeline.creationDate, order: .reverse) var localTimelines: [LocalTimeline]
+  @Query(sort: \TagGroup.creationDate, order: .reverse) var tagGroups: [TagGroup]
 
   var body: some View {
     NavigationStack(path: $routerPath.path) {
@@ -42,7 +50,7 @@ struct SettingsTabs: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbarBackground(theme.primaryBackgroundColor.opacity(0.50), for: .navigationBar)
       .toolbar {
-        if UIDevice.current.userInterfaceIdiom == .phone {
+        if UIDevice.current.userInterfaceIdiom == .phone || isModal {
           ToolbarItem {
             Button {
               dismiss()
@@ -51,7 +59,7 @@ struct SettingsTabs: View {
             }
           }
         }
-        if UIDevice.current.userInterfaceIdiom == .pad && !preferences.showiPadSecondaryColumn {
+        if UIDevice.current.userInterfaceIdiom == .pad, !preferences.showiPadSecondaryColumn {
           SecondaryColumnToolbarItem()
         }
       }
@@ -67,9 +75,9 @@ struct SettingsTabs: View {
       }
     }
     .withSafariRouter()
-    .environmentObject(routerPath)
-    .onChange(of: $popToRootTab.wrappedValue) { popToRootTab in
-      if popToRootTab == .notifications {
+    .environment(routerPath)
+    .onChange(of: $popToRootTab.wrappedValue) { _, newValue in
+      if newValue == .notifications {
         routerPath.path = []
       }
     }
@@ -114,7 +122,7 @@ struct SettingsTabs: View {
        let sub = pushNotifications.subscriptions.first(where: { $0.account.token == token })
     {
       let client = Client(server: account.server, oauthToken: token)
-      await TimelineCache.shared.clearCache(for: client.id)
+      await timelineCache.clearCache(for: client.id)
       await sub.deleteSubscription()
       appAccountsManager.delete(account: account)
     }
@@ -139,6 +147,9 @@ struct SettingsTabs: View {
       NavigationLink(destination: remoteLocalTimelinesView) {
         Label("settings.general.remote-timelines", systemImage: "dot.radiowaves.right")
       }
+      NavigationLink(destination: tagGroupsView) {
+        Label("timeline.filter.tag-groups", systemImage: "number")
+      }
       NavigationLink(destination: ContentSettingsView()) {
         Label("settings.general.content", systemImage: "rectangle.stack")
       }
@@ -148,17 +159,21 @@ struct SettingsTabs: View {
       NavigationLink(destination: TranslationSettingsView()) {
         Label("settings.general.translate", systemImage: "captions.bubble")
       }
+      #if !targetEnvironment(macCatalyst)
       Link(destination: URL(string: UIApplication.openSettingsURLString)!) {
         Label("settings.system", systemImage: "gear")
       }
       .tint(theme.labelColor)
+      #endif
     }
     .listRowBackground(theme.primaryBackgroundColor)
   }
 
+  @ViewBuilder
   private var otherSections: some View {
+    @Bindable var preferences = preferences
     Section("settings.section.other") {
-      if !ProcessInfo.processInfo.isiOSAppOnMac {
+      if !ProcessInfo.processInfo.isMacCatalystApp {
         Picker(selection: $preferences.preferredBrowser) {
           ForEach(PreferredBrowser.allCases, id: \.rawValue) { browser in
             switch browser {
@@ -191,7 +206,7 @@ struct SettingsTabs: View {
 
   private var appSection: some View {
     Section {
-      if !ProcessInfo.processInfo.isiOSAppOnMac {
+      if !ProcessInfo.processInfo.isMacCatalystApp {
         NavigationLink(destination: IconSelectorView()) {
           Label {
             Text("settings.app.icon")
@@ -262,16 +277,45 @@ struct SettingsTabs: View {
     }
   }
 
-  private var remoteLocalTimelinesView: some View {
+  private var tagGroupsView: some View {
     Form {
-      ForEach(preferences.remoteLocalTimelines, id: \.self) { server in
-        Text(server)
-      }.onDelete { indexes in
+      ForEach(tagGroups) { group in
+        Label(group.title, systemImage: group.symbolName)
+          .onTapGesture {
+            routerPath.presentedSheet = .editTagGroup(tagGroup: group, onSaved: nil)
+          }
+      }
+      .onDelete { indexes in
         if let index = indexes.first {
-          _ = preferences.remoteLocalTimelines.remove(at: index)
+          context.delete(tagGroups[index])
         }
       }
-      .onMove(perform: moveTimelineItems)
+      .listRowBackground(theme.primaryBackgroundColor)
+
+      Button {
+        routerPath.presentedSheet = .addTagGroup
+      } label: {
+        Label("timeline.filter.add-tag-groups", systemImage: "plus")
+      }
+      .listRowBackground(theme.primaryBackgroundColor)
+    }
+    .navigationTitle("timeline.filter.tag-groups")
+    .scrollContentBackground(.hidden)
+    .background(theme.secondaryBackgroundColor)
+    .toolbar {
+      EditButton()
+    }
+  }
+
+  private var remoteLocalTimelinesView: some View {
+    Form {
+      ForEach(localTimelines) { timeline in
+        Text(timeline.instance)
+      }.onDelete { indexes in
+        if let index = indexes.first {
+          context.delete(localTimelines[index])
+        }
+      }
       .listRowBackground(theme.primaryBackgroundColor)
       Button {
         routerPath.presentedSheet = .addRemoteLocalTimeline
@@ -284,12 +328,8 @@ struct SettingsTabs: View {
     .scrollContentBackground(.hidden)
     .background(theme.secondaryBackgroundColor)
     .toolbar {
-        EditButton()
+      EditButton()
     }
-  }
-
-  private func moveTimelineItems(from source: IndexSet, to destination: Int) {
-    preferences.remoteLocalTimelines.move(fromOffsets: source, toOffset: destination)
   }
 
   private var cacheSection: some View {

@@ -1,6 +1,7 @@
 import DesignSystem
 import SwiftUI
 
+@MainActor
 struct IconSelectorView: View {
   enum Icon: Int, CaseIterable, Identifiable {
     var id: String {
@@ -25,13 +26,16 @@ struct IconSelectorView: View {
     case alt33
     case alt34, alt35
     case alt36
+    case alt37
+    case alt38, alt39
+    case alt40, alt41, alt42
 
     var appIconName: String {
       switch self {
       case .primary:
-        return "AppIcon"
+        "AppIcon"
       default:
-        return "AppIconAlternate\(rawValue)"
+        "AppIconAlternate\(rawValue)"
       }
     }
 
@@ -51,13 +55,15 @@ struct IconSelectorView: View {
                                                                           .alt15, .alt16, .alt17, .alt18, .alt19, .alt25]),
       IconSelector(title: "\("settings.app.icon.designed-by".localized) Albert Kinng", icons: [.alt20, .alt21, .alt22, .alt23, .alt24]),
       IconSelector(title: "\("settings.app.icon.designed-by".localized) Dan van Moll", icons: [.alt26, .alt27, .alt28]),
-      IconSelector(title: "\("settings.app.icon.designed-by".localized) Chanhwi Joo (GitHub @te6-in)", icons: [.alt29, .alt34, .alt31, .alt35, .alt30, .alt32]),
+      IconSelector(title: "\("settings.app.icon.designed-by".localized) Chanhwi Joo (GitHub @te6-in)", icons: [.alt29, .alt34, .alt31, .alt35, .alt30, .alt32, .alt40]),
       IconSelector(title: "\("settings.app.icon.designed-by".localized) W. Kovács Ágnes (@wildgica)", icons: [.alt33]),
       IconSelector(title: "\("settings.app.icon.designed-by".localized) Duncan Horne", icons: [.alt36]),
+      IconSelector(title: "\("settings.app.icon.designed-by".localized) BeAware@social.beaware.live", icons: [.alt37, .alt41, .alt42]),
+      IconSelector(title: "\("settings.app.icon.designed-by".localized) Simone Margio", icons: [.alt38, .alt39]),
     ]
   }
 
-  @EnvironmentObject private var theme: Theme
+  @Environment(Theme.self) private var theme
   @State private var currentIcon = UIApplication.shared.alternateIconName ?? Icon.primary.appIconName
 
   private let columns = [GridItem(.adaptive(minimum: 125, maximum: 1024))]
@@ -115,6 +121,6 @@ struct IconSelectorView: View {
 
 extension String {
   var localized: String {
-    return NSLocalizedString(self, comment: "")
+    NSLocalizedString(self, comment: "")
   }
 }

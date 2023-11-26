@@ -3,16 +3,17 @@ import EmojiText
 import Env
 import SwiftUI
 
+@MainActor
 public struct AppAccountView: View {
-  @EnvironmentObject private var theme: Theme
-  @EnvironmentObject private var routerPath: RouterPath
-  @EnvironmentObject private var appAccounts: AppAccountsManager
-  @EnvironmentObject private var preferences: UserPreferences
+  @Environment(Theme.self) private var theme
+  @Environment(RouterPath.self) private var routerPath
+  @Environment(AppAccountsManager.self) private var appAccounts
+  @Environment(UserPreferences.self) private var preferences
 
-  @StateObject var viewModel: AppAccountViewModel
+  @State var viewModel: AppAccountViewModel
 
   public init(viewModel: AppAccountViewModel) {
-    _viewModel = .init(wrappedValue: viewModel)
+    self.viewModel = viewModel
   }
 
   public var body: some View {
@@ -34,7 +35,7 @@ public struct AppAccountView: View {
   private var compactView: some View {
     HStack {
       if let account = viewModel.account {
-        AvatarView(url: account.avatar)
+        AvatarView(account: account)
       } else {
         ProgressView()
       }
@@ -47,29 +48,29 @@ public struct AppAccountView: View {
          let account = viewModel.account
       {
         routerPath.navigate(to: .accountSettingsWithAccount(account: account, appAccount: viewModel.appAccount))
-        HapticManager.shared.fireHaptic(of: .buttonPress)
+        HapticManager.shared.fireHaptic(.buttonPress)
       } else {
         var transation = Transaction()
         transation.disablesAnimations = true
         withTransaction(transation) {
           appAccounts.currentAccount = viewModel.appAccount
-          HapticManager.shared.fireHaptic(of: .notification(.success))
+          HapticManager.shared.fireHaptic(.notification(.success))
         }
       }
     } label: {
       HStack {
         if let account = viewModel.account {
           ZStack(alignment: .topTrailing) {
-            AvatarView(url: account.avatar)
+            AvatarView(account: account)
             if viewModel.appAccount.id == appAccounts.currentAccount.id {
               Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.white, .green)
                 .offset(x: 5, y: -5)
             } else if viewModel.showBadge,
                       let token = viewModel.appAccount.oauthToken,
-                      preferences.getNotificationsCount(for: token) > 0
+                      let notificationsCount = preferences.notificationsCount[token],
+                      notificationsCount > 0
             {
-              let notificationsCount = preferences.getNotificationsCount(for: token)
               ZStack {
                 Circle()
                   .fill(.red)

@@ -2,9 +2,10 @@ import DesignSystem
 import Env
 import SwiftUI
 
+@MainActor
 struct AboutView: View {
-  @EnvironmentObject private var routerPath: RouterPath
-  @EnvironmentObject private var theme: Theme
+  @Environment(RouterPath.self) private var routerPath
+  @Environment(Theme.self) private var theme
 
   let versionNumber: String
 
@@ -75,6 +76,8 @@ struct AboutView: View {
         • [SwiftUI-Introspect](https://github.com/siteline/SwiftUI-Introspect)
 
         • [RevenueCat](https://github.com/RevenueCat/purchases-ios)
+
+        • [SFSafeSymbols](https://github.com/SFSafeSymbols/SFSafeSymbols)
         """)
         .multilineTextAlignment(.leading)
         .font(.scaledSubheadline)
@@ -99,6 +102,6 @@ struct AboutView: View {
 struct AboutView_Previews: PreviewProvider {
   static var previews: some View {
     AboutView()
-      .environmentObject(Theme.shared)
+      .environment(Theme.shared)
   }
 }

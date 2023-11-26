@@ -6,15 +6,17 @@ import SwiftUI
 
 struct StatusEditorMediaEditView: View {
   @Environment(\.dismiss) private var dismiss
-  @EnvironmentObject private var theme: Theme
-  @EnvironmentObject private var currentInstance: CurrentInstance
-  @ObservedObject var viewModel: StatusEditorViewModel
+  @Environment(Theme.self) private var theme
+  @Environment(CurrentInstance.self) private var currentInstance
+  var viewModel: StatusEditorViewModel
   let container: StatusEditorMediaContainer
 
   @State private var imageDescription: String = ""
   @FocusState private var isFieldFocused: Bool
 
   @State private var isUpdating: Bool = false
+
+  @State private var didAppear: Bool = false
 
   var body: some View {
     NavigationStack {
@@ -51,8 +53,11 @@ struct StatusEditorMediaEditView: View {
       .scrollContentBackground(.hidden)
       .background(theme.secondaryBackgroundColor)
       .onAppear {
-        imageDescription = container.mediaAttachment?.description ?? ""
-        isFieldFocused = true
+        if !didAppear {
+          imageDescription = container.mediaAttachment?.description ?? ""
+          isFieldFocused = true
+          didAppear = true
+        }
       }
       .navigationTitle("status.editor.media.edit-image")
       .navigationBarTitleDisplayMode(.inline)
@@ -61,7 +66,7 @@ struct StatusEditorMediaEditView: View {
           Button {
             if !imageDescription.isEmpty {
               isUpdating = true
-              if currentInstance.isEditAltTextSupported && viewModel.mode.isEditing {
+              if currentInstance.isEditAltTextSupported, viewModel.mode.isEditing {
                 Task {
                   await viewModel.editDescription(container: container, description: imageDescription)
                   dismiss()

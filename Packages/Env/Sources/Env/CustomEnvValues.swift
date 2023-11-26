@@ -21,6 +21,14 @@ private struct IsSupporter: EnvironmentKey {
   static let defaultValue: Bool = false
 }
 
+private struct IsStatusFocused: EnvironmentKey {
+  static let defaultValue: Bool = false
+}
+
+private struct IndentationLevel: EnvironmentKey {
+  static let defaultValue: UInt = 0
+}
+
 public extension EnvironmentValues {
   var isSecondaryColumn: Bool {
     get { self[SecondaryColumnKey.self] }
@@ -45,5 +53,15 @@ public extension EnvironmentValues {
   var isSupporter: Bool {
     get { self[IsSupporter.self] }
     set { self[IsSupporter.self] = newValue }
+  }
+
+  var isStatusFocused: Bool {
+    get { self[IsStatusFocused.self] }
+    set { self[IsStatusFocused.self] = newValue }
+  }
+
+  var indentationLevel: UInt {
+    get { self[IndentationLevel.self] }
+    set { self[IndentationLevel.self] = newValue }
   }
 }

@@ -3,9 +3,12 @@ import Env
 import Models
 import SwiftUI
 
+@MainActor
 struct StatusRowHeaderView: View {
   @Environment(\.isInCaptureMode) private var isInCaptureMode: Bool
-  @EnvironmentObject private var theme: Theme
+  @Environment(\.isStatusFocused) private var isFocused
+
+  @Environment(Theme.self) private var theme
 
   let viewModel: StatusRowViewModel
 
@@ -29,7 +32,7 @@ struct StatusRowHeaderView: View {
       viewModel.navigateToAccountDetail(account: viewModel.finalStatus.account)
     }
     .accessibilityActions {
-      if viewModel.isFocused {
+      if isFocused {
         StatusRowContextMenu(viewModel: viewModel)
       }
     }
@@ -39,7 +42,7 @@ struct StatusRowHeaderView: View {
   private var accountView: some View {
     HStack(alignment: .center) {
       if theme.avatarPosition == .top {
-        AvatarView(url: viewModel.finalStatus.account.avatar, size: .status)
+        AvatarView(account: viewModel.finalStatus.account, config: .status, hasPopup: true)
       }
       VStack(alignment: .leading, spacing: 2) {
         HStack(alignment: .firstTextBaseline, spacing: 2) {

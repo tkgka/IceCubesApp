@@ -6,8 +6,9 @@ import Network
 import Status
 import SwiftUI
 
+@MainActor
 struct NotificationRowView: View {
-  @EnvironmentObject private var theme: Theme
+  @Environment(Theme.self) private var theme
   @Environment(\.redactionReasons) private var reasons
 
   let notification: ConsolidatedNotification
@@ -22,8 +23,8 @@ struct NotificationRowView: View {
           .accessibilityHidden(true)
       } else {
         makeNotificationIconView(type: notification.type)
-          .frame(width: AvatarView.Size.status.size.width,
-                 height: AvatarView.Size.status.size.height)
+          .frame(width: AvatarView.FrameConfig.status.width,
+                 height: AvatarView.FrameConfig.status.height)
           .accessibilityHidden(true)
       }
       VStack(alignment: .leading, spacing: 2) {
@@ -51,7 +52,7 @@ struct NotificationRowView: View {
 
   private func makeAvatarView(type: Models.Notification.NotificationType) -> some View {
     ZStack(alignment: .topLeading) {
-      AvatarView(url: notification.accounts[0].avatar)
+      AvatarView(account: notification.accounts[0], hasPopup: true)
       makeNotificationIconView(type: type)
         .offset(x: -8, y: -8)
     }
@@ -82,7 +83,7 @@ struct NotificationRowView: View {
         ScrollView(.horizontal, showsIndicators: false) {
           LazyHStack(spacing: 8) {
             ForEach(notification.accounts) { account in
-              AvatarView(url: account.avatar)
+              AvatarView(account: account, hasPopup: true)
                 .contentShape(Rectangle())
                 .onTapGesture {
                   routerPath.navigate(to: .accountDetailWithAccount(account: account))
@@ -90,7 +91,7 @@ struct NotificationRowView: View {
             }
           }
           .padding(.leading, 1)
-          .frame(height: AvatarView.Size.status.size.height + 2)
+          .frame(height: AvatarView.FrameConfig.status.size.height + 2)
         }.offset(y: -1)
       }
       HStack(spacing: 0) {
@@ -149,16 +150,16 @@ struct NotificationRowView: View {
     if let status = notification.status {
       HStack {
         if type == .mention {
-          StatusRowView(viewModel: { .init(status: status,
-                                           client: client,
-                                           routerPath: routerPath,
-                                           showActions: true) })
+          StatusRowView(viewModel: .init(status: status,
+                                         client: client,
+                                         routerPath: routerPath,
+                                         showActions: true))
         } else {
-          StatusRowView(viewModel: { .init(status: status,
-                                           client: client,
-                                           routerPath: routerPath,
-                                           showActions: false,
-                                           textDisabled: true) })
+          StatusRowView(viewModel: .init(status: status,
+                                         client: client,
+                                         routerPath: routerPath,
+                                         showActions: false,
+                                         textDisabled: true))
             .lineLimit(4)
         }
         Spacer()
@@ -202,7 +203,7 @@ struct NotificationRowView: View {
   private var accessibilityUserActions: some View {
     ForEach(notification.accounts) { account in
       Button("@\(account.username)") {
-        HapticManager.shared.fireHaptic(of: .notification(.success))
+        HapticManager.shared.fireHaptic(.notification(.success))
         routerPath.navigate(to: .accountDetail(id: account.id))
       }
     }

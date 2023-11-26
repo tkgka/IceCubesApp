@@ -4,7 +4,7 @@ import LRUCache
 import Models
 import SwiftUI
 
-public class ReblogCache {
+public class ReblogCache: @unchecked Sendable {
   struct CacheEntry: Codable {
     var reblogId: String
     var postId: String
@@ -75,7 +75,7 @@ public class ReblogCache {
       if let reblog = status.reblog {
         if let cached = statusCache.value(forKey: reblog.id) {
           // this is already cached
-          if cached.postId != status.id && cached.seen {
+          if cached.postId != status.id, cached.seen {
             // This was posted by someone other than the person we have in the cache
             // and we have seen the items at some point, so we might want to suppress it
 

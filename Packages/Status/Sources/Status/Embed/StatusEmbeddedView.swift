@@ -7,7 +7,7 @@ import SwiftUI
 
 @MainActor
 public struct StatusEmbeddedView: View {
-  @EnvironmentObject private var theme: Theme
+  @Environment(Theme.self) private var theme
 
   public let status: Status
   public let client: Client
@@ -23,12 +23,13 @@ public struct StatusEmbeddedView: View {
     HStack {
       VStack(alignment: .leading) {
         makeAccountView(account: status.reblog?.account ?? status.account)
-        StatusRowView(viewModel: { .init(status: status,
-                                         client: client,
-                                         routerPath: routerPath,
-                                         showActions: false) })
+        StatusRowView(viewModel: .init(status: status,
+                                       client: client,
+                                       routerPath: routerPath,
+                                       showActions: false))
           .accessibilityLabel(status.content.asRawText)
           .environment(\.isCompact, true)
+          .environment(\.isStatusFocused, false)
       }
       Spacer()
     }
@@ -45,7 +46,7 @@ public struct StatusEmbeddedView: View {
 
   private func makeAccountView(account: Account) -> some View {
     HStack(alignment: .center) {
-      AvatarView(url: account.avatar, size: .embed)
+      AvatarView(account: account, config: .embed, hasPopup: true)
       VStack(alignment: .leading, spacing: 0) {
         EmojiTextApp(.init(stringValue: account.safeDisplayName), emojis: account.emojis)
           .font(.scaledFootnote)

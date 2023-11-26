@@ -2,9 +2,10 @@ import Combine
 import Foundation
 import Models
 import Network
+import Observation
 
 @MainActor
-public class StreamWatcher: ObservableObject {
+@Observable public class StreamWatcher {
   private var client: Client?
   private var task: URLSessionWebSocketTask?
   private var watchedStreams: [Stream] = []
@@ -12,7 +13,7 @@ public class StreamWatcher: ObservableObject {
 
   private let decoder = JSONDecoder()
   private let encoder = JSONEncoder()
-  
+
   private var retryDelay: Int = 10
 
   public enum Stream: String {
@@ -21,10 +22,9 @@ public class StreamWatcher: ObservableObject {
     case direct
   }
 
-  @Published public var events: [any StreamEvent] = []
-  @Published public var unreadNotificationsCount: Int = 0
-  @Published public var latestEvent: (any StreamEvent)?
-  
+  public var events: [any StreamEvent] = []
+  public var unreadNotificationsCount: Int = 0
+  public var latestEvent: (any StreamEvent)?
 
   public init() {
     decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -40,9 +40,14 @@ public class StreamWatcher: ObservableObject {
   }
 
   private func connect() {
-    guard let client else { return }
-    task = client.makeWebSocketTask(endpoint: Streaming.streaming, instanceStreamingURL: instanceStreamingURL)
-    task?.resume()
+    guard let task = try? client?.makeWebSocketTask(
+      endpoint: Streaming.streaming,
+      instanceStreamingURL: instanceStreamingURL
+    ) else {
+      return
+    }
+    self.task = task
+    self.task?.resume()
     receiveMessage()
   }
 
@@ -66,14 +71,15 @@ public class StreamWatcher: ObservableObject {
 
   private func sendMessage(message: StreamMessage) {
     if let encodedMessage = try? encoder.encode(message),
-       let stringMessage = String(data: encodedMessage, encoding: .utf8) {
+       let stringMessage = String(data: encodedMessage, encoding: .utf8)
+    {
       task?.send(.string(stringMessage), completionHandler: { _ in })
     }
   }
 
   private func receiveMessage() {
     task?.receive(completionHandler: { [weak self] result in
-      guard let self = self else { return }
+      guard let self else { return }
       switch result {
       case let .success(message):
         switch message {
@@ -83,8 +89,8 @@ public class StreamWatcher: ObservableObject {
               print("Error decoding streaming event string")
               return
             }
-            let rawEvent = try self.decoder.decode(RawStreamEvent.self, from: data)
-            if let event = self.rawEventToEvent(rawEvent: rawEvent) {
+            let rawEvent = try decoder.decode(RawStreamEvent.self, from: data)
+            if let event = rawEventToEvent(rawEvent: rawEvent) {
               Task { @MainActor in
                 self.events.append(event)
                 self.latestEvent = event
@@ -101,10 +107,10 @@ public class StreamWatcher: ObservableObject {
           break
         }
 
-        self.receiveMessage()
+        receiveMessage()
 
       case .failure:
-        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(self.retryDelay)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(retryDelay)) {
           self.retryDelay += 30
           self.stopWatching()
           self.connect()
