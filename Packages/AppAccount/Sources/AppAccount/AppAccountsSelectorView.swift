@@ -26,18 +26,18 @@ public struct AppAccountsSelectorView: View {
   }
 
   private var preferredHeight: CGFloat {
-    var baseHeight: CGFloat = 220
+    var baseHeight: CGFloat = 310
     baseHeight += CGFloat(60 * accountsViewModel.count)
     return baseHeight
   }
 
   public init(routerPath: RouterPath,
               accountCreationEnabled: Bool = true,
-              avatarConfig: AvatarView.FrameConfig = .badge)
+              avatarConfig: AvatarView.FrameConfig? = nil)
   {
     self.routerPath = routerPath
     self.accountCreationEnabled = accountCreationEnabled
-    self.avatarConfig = avatarConfig
+    self.avatarConfig = avatarConfig ?? .badge
   }
 
   public var body: some View {
@@ -73,9 +73,9 @@ public struct AppAccountsSelectorView: View {
   private var labelView: some View {
     Group {
       if let account = currentAccount.account, !currentAccount.isLoadingAccount {
-        AvatarView(account: account, config: avatarConfig)
+        AvatarView(account.avatar, config: avatarConfig)
       } else {
-        AvatarView(account: nil,  config: avatarConfig)
+        AvatarView(config: avatarConfig)
           .redacted(reason: .placeholder)
           .allowsHitTesting(false)
       }
@@ -88,43 +88,38 @@ public struct AppAccountsSelectorView: View {
     }
   }
 
-  private var accountBackgroundColor: Color {
-    if #available(iOS 16.4, *) {
-      Color.clear
-    } else {
-      theme.secondaryBackgroundColor
-    }
-  }
-
   private var accountsView: some View {
     NavigationStack {
       List {
         Section {
           ForEach(accountsViewModel.sorted { $0.acct < $1.acct }, id: \.appAccount.id) { viewModel in
-            AppAccountView(viewModel: viewModel)
+            AppAccountView(viewModel: viewModel, isParentPresented: $isPresented)
           }
+          addAccountButton
+          #if os(visionOS)
+          .foregroundStyle(theme.labelColor)
+          #endif
         }
+        #if !os(visionOS)
         .listRowBackground(theme.primaryBackgroundColor)
+        #endif
 
         if accountCreationEnabled {
           Section {
-            Button {
-              isPresented = false
-              HapticManager.shared.fireHaptic(.buttonPress)
-              DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                routerPath.presentedSheet = .addAccount
-              }
-            } label: {
-              Label("app-account.button.add", systemImage: "person.badge.plus")
-            }
             settingsButton
+            aboutButton
+            supportButton
           }
+          #if os(visionOS)
+          .foregroundStyle(theme.labelColor)
+          #else
           .listRowBackground(theme.primaryBackgroundColor)
+          #endif
         }
       }
       .listStyle(.insetGrouped)
       .scrollContentBackground(.hidden)
-      .background(accountBackgroundColor)
+      .background(.clear)
       .navigationTitle("settings.section.accounts")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -140,6 +135,18 @@ public struct AppAccountsSelectorView: View {
     }
   }
 
+  private var addAccountButton: some View {
+    Button {
+      isPresented = false
+      HapticManager.shared.fireHaptic(.buttonPress)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        routerPath.presentedSheet = .addAccount
+      }
+    } label: {
+      Label("app-account.button.add", systemImage: "person.badge.plus")
+    }
+  }
+
   private var settingsButton: some View {
     Button {
       isPresented = false
@@ -152,10 +159,34 @@ public struct AppAccountsSelectorView: View {
     }
   }
 
+  private var supportButton: some View {
+    Button {
+      isPresented = false
+      HapticManager.shared.fireHaptic(.buttonPress)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        routerPath.presentedSheet = .support
+      }
+    } label: {
+      Label("settings.app.support", systemImage: "wand.and.stars")
+    }
+  }
+
+  private var aboutButton: some View {
+    Button {
+      isPresented = false
+      HapticManager.shared.fireHaptic(.buttonPress)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        routerPath.presentedSheet = .about
+      }
+    } label: {
+      Label("settings.app.about", systemImage: "info.circle")
+    }
+  }
+
   private func refreshAccounts() {
     accountsViewModel = []
     for account in appAccounts.availableAccounts {
-      let viewModel: AppAccountViewModel = .init(appAccount: account, isInNavigation: false, showBadge: true)
+      let viewModel: AppAccountViewModel = .init(appAccount: account, isInSettings: false, showBadge: true)
       accountsViewModel.append(viewModel)
     }
   }

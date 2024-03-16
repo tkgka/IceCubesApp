@@ -2,7 +2,7 @@ import DesignSystem
 import Env
 import Models
 import Network
-import Status
+import StatusKit
 import SwiftUI
 
 public struct ReportView: View {
@@ -35,42 +35,38 @@ public struct ReportView: View {
       }
       .navigationTitle("report.title")
       .navigationBarTitleDisplayMode(.inline)
-      .scrollContentBackground(.hidden)
-      .background(theme.secondaryBackgroundColor)
-      .scrollDismissesKeyboard(.immediately)
-      .toolbar {
-        ToolbarItem(placement: .navigationBarTrailing) {
-          Button {
-            isSendingReport = true
-            Task {
-              do {
-                let _: ReportSent =
-                  try await client.post(endpoint: Statuses.report(accountId: status.account.id,
-                                                                  statusId: status.id,
-                                                                  comment: commentText))
-                dismiss()
-                isSendingReport = false
-              } catch {
-                isSendingReport = false
+      #if !os(visionOS)
+        .scrollContentBackground(.hidden)
+        .background(theme.secondaryBackgroundColor)
+        .scrollDismissesKeyboard(.immediately)
+      #endif
+        .toolbar {
+          ToolbarItem(placement: .navigationBarTrailing) {
+            Button {
+              isSendingReport = true
+              Task {
+                do {
+                  let _: ReportSent =
+                    try await client.post(endpoint: Statuses.report(accountId: status.account.id,
+                                                                    statusId: status.id,
+                                                                    comment: commentText))
+                  dismiss()
+                  isSendingReport = false
+                } catch {
+                  isSendingReport = false
+                }
+              }
+            } label: {
+              if isSendingReport {
+                ProgressView()
+              } else {
+                Text("report.action.send")
               }
             }
-          } label: {
-            if isSendingReport {
-              ProgressView()
-            } else {
-              Text("report.action.send")
-            }
           }
-        }
 
-        ToolbarItem(placement: .navigationBarLeading) {
-          Button {
-            dismiss()
-          } label: {
-            Text("action.cancel")
-          }
+          CancelToolbarItem()
         }
-      }
     }
   }
 }

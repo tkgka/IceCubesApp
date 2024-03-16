@@ -44,16 +44,16 @@ public struct AccountsListRow: View {
 
   public var body: some View {
     HStack(alignment: .top) {
-      AvatarView(account: viewModel.account, config: .status)
+      AvatarView(viewModel.account.avatar)
       VStack(alignment: .leading, spacing: 2) {
         EmojiTextApp(.init(stringValue: viewModel.account.safeDisplayName), emojis: viewModel.account.emojis)
           .font(.scaledSubheadline)
-          .emojiSize(Font.scaledSubheadlineFont.emojiSize)
-          .emojiBaselineOffset(Font.scaledSubheadlineFont.emojiBaselineOffset)
+          .emojiText.size(Font.scaledSubheadlineFont.emojiSize)
+          .emojiText.baselineOffset(Font.scaledSubheadlineFont.emojiBaselineOffset)
           .fontWeight(.semibold)
         Text("@\(viewModel.account.acct)")
           .font(.scaledFootnote)
-          .foregroundColor(.gray)
+          .foregroundStyle(Color.secondary)
 
         // First parameter is the number for the plural
         // Second parameter is the formatted string to show
@@ -68,8 +68,8 @@ public struct AccountsListRow: View {
 
             EmojiTextApp(field.value, emojis: viewModel.account.emojis)
               .font(.scaledFootnote)
-              .emojiSize(Font.scaledFootnoteFont.emojiSize)
-              .emojiBaselineOffset(Font.scaledFootnoteFont.emojiBaselineOffset)
+              .emojiText.size(Font.scaledFootnoteFont.emojiSize)
+              .emojiText.baselineOffset(Font.scaledFootnoteFont.emojiBaselineOffset)
               .environment(\.openURL, OpenURLAction { url in
                 routerPath.handle(url: url)
               })
@@ -78,8 +78,8 @@ public struct AccountsListRow: View {
 
         EmojiTextApp(viewModel.account.note, emojis: viewModel.account.emojis, lineLimit: 2)
           .font(.scaledCaption)
-          .emojiSize(Font.scaledFootnoteFont.emojiSize)
-          .emojiBaselineOffset(Font.scaledFootnoteFont.emojiBaselineOffset)
+          .emojiText.size(Font.scaledFootnoteFont.emojiSize)
+          .emojiText.baselineOffset(Font.scaledFootnoteFont.emojiBaselineOffset)
           .environment(\.openURL, OpenURLAction { url in
             routerPath.handle(url: url)
           })

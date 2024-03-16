@@ -17,9 +17,8 @@ struct AccountSettingsView: View {
   @Environment(Theme.self) private var theme
   @Environment(AppAccountsManager.self) private var appAccountsManager
   @Environment(Client.self) private var client
+  @Environment(RouterPath.self) private var routerPath
 
-  @State private var isEditingAccount: Bool = false
-  @State private var isEditingFilters: Bool = false
   @State private var cachedPostsCount: Int = 0
   @State private var timelineCache = TimelineCache()
 
@@ -30,7 +29,7 @@ struct AccountSettingsView: View {
     Form {
       Section {
         Button {
-          isEditingAccount = true
+          routerPath.presentedSheet = .accountFiltersList
         } label: {
           Label("account.action.edit-info", systemImage: "pencil")
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -40,7 +39,7 @@ struct AccountSettingsView: View {
 
         if currentInstance.isFiltersSupported {
           Button {
-            isEditingFilters = true
+            routerPath.presentedSheet = .accountFiltersList
           } label: {
             Label("account.action.edit-filters", systemImage: "line.3.horizontal.decrease.circle")
               .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,16 +95,10 @@ struct AccountSettingsView: View {
       }
       .listRowBackground(theme.primaryBackgroundColor)
     }
-    .sheet(isPresented: $isEditingAccount, content: {
-      EditAccountView()
-    })
-    .sheet(isPresented: $isEditingFilters, content: {
-      FiltersListView()
-    })
     .toolbar {
       ToolbarItem(placement: .principal) {
         HStack {
-          AvatarView(account: account, config: .embed)
+          AvatarView(account.avatar, config: .embed)
           Text(account.safeDisplayName)
             .font(.headline)
         }
@@ -115,7 +108,9 @@ struct AccountSettingsView: View {
       cachedPostsCount = await timelineCache.cachedPostsCount(for: appAccountsManager.currentClient.id)
     }
     .navigationTitle(account.safeDisplayName)
-    .scrollContentBackground(.hidden)
-    .background(theme.secondaryBackgroundColor)
+    #if !os(visionOS)
+      .scrollContentBackground(.hidden)
+      .background(theme.secondaryBackgroundColor)
+    #endif
   }
 }

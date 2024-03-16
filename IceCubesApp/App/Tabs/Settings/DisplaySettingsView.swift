@@ -4,9 +4,10 @@ import Env
 import Models
 import Network
 import Observation
-import Status
+import StatusKit
 import SwiftUI
 
+@MainActor
 @Observable class DisplaySettingsLocalValues {
   var tintColor = Theme.shared.tintColor
   var primaryBackgroundColor = Theme.shared.primaryBackgroundColor
@@ -35,44 +36,50 @@ struct DisplaySettingsView: View {
   var body: some View {
     ZStack(alignment: .top) {
       Form {
-        StatusRowView(viewModel: previewStatusViewModel)
-          .allowsHitTesting(false)
-          .opacity(0)
-          .hidden()
-        themeSection
+        #if !os(visionOS)
+          StatusRowView(viewModel: previewStatusViewModel)
+            .allowsHitTesting(false)
+            .opacity(0)
+            .hidden()
+          themeSection
+        #endif
         fontSection
         layoutSection
         platformsSection
         resetSection
       }
       .navigationTitle("settings.display.navigation-title")
-      .scrollContentBackground(.hidden)
-      .background(theme.secondaryBackgroundColor)
-      .task(id: localValues.tintColor) {
-        do { try await Task.sleep(for: .microseconds(500)) } catch {}
-        theme.tintColor = localValues.tintColor
-      }
-      .task(id: localValues.primaryBackgroundColor) {
-        do { try await Task.sleep(for: .microseconds(500)) } catch {}
-        theme.primaryBackgroundColor = localValues.primaryBackgroundColor
-      }
-      .task(id: localValues.secondaryBackgroundColor) {
-        do { try await Task.sleep(for: .microseconds(500)) } catch {}
-        theme.secondaryBackgroundColor = localValues.secondaryBackgroundColor
-      }
-      .task(id: localValues.labelColor) {
-        do { try await Task.sleep(for: .microseconds(500)) } catch {}
-        theme.labelColor = localValues.labelColor
-      }
-      .task(id: localValues.lineSpacing) {
-        do { try await Task.sleep(for: .microseconds(500)) } catch {}
-        theme.lineSpacing = localValues.lineSpacing
-      }
-      .task(id: localValues.fontSizeScale) {
-        do { try await Task.sleep(for: .microseconds(500)) } catch {}
-        theme.fontSizeScale = localValues.fontSizeScale
-      }
-      examplePost
+      #if !os(visionOS)
+        .scrollContentBackground(.hidden)
+        .background(theme.secondaryBackgroundColor)
+      #endif
+        .task(id: localValues.tintColor) {
+          do { try await Task.sleep(for: .microseconds(500)) } catch {}
+          theme.tintColor = localValues.tintColor
+        }
+        .task(id: localValues.primaryBackgroundColor) {
+          do { try await Task.sleep(for: .microseconds(500)) } catch {}
+          theme.primaryBackgroundColor = localValues.primaryBackgroundColor
+        }
+        .task(id: localValues.secondaryBackgroundColor) {
+          do { try await Task.sleep(for: .microseconds(500)) } catch {}
+          theme.secondaryBackgroundColor = localValues.secondaryBackgroundColor
+        }
+        .task(id: localValues.labelColor) {
+          do { try await Task.sleep(for: .microseconds(500)) } catch {}
+          theme.labelColor = localValues.labelColor
+        }
+        .task(id: localValues.lineSpacing) {
+          do { try await Task.sleep(for: .microseconds(500)) } catch {}
+          theme.lineSpacing = localValues.lineSpacing
+        }
+        .task(id: localValues.fontSizeScale) {
+          do { try await Task.sleep(for: .microseconds(500)) } catch {}
+          theme.fontSizeScale = localValues.fontSizeScale
+        }
+      #if !os(visionOS)
+        examplePost
+      #endif
     }
   }
 
@@ -121,7 +128,9 @@ struct DisplaySettingsView: View {
         Text("settings.display.section.theme.footer")
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private var fontSection: some View {
@@ -173,7 +182,9 @@ struct DisplaySettingsView: View {
         d[.leading]
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   @ViewBuilder
@@ -197,6 +208,11 @@ struct DisplaySettingsView: View {
           Text(buttonStyle.description).tag(buttonStyle)
         }
       }
+      Picker("settings.display.status.action-secondary", selection: $theme.statusActionSecondary) {
+        ForEach(Theme.StatusActionSecondary.allCases, id: \.rawValue) { action in
+          Text(action.description).tag(action)
+        }
+      }
       Picker("settings.display.status.media-style", selection: $theme.statusDisplayStyle) {
         ForEach(Theme.StatusDisplayStyle.allCases, id: \.rawValue) { buttonStyle in
           Text(buttonStyle.description).tag(buttonStyle)
@@ -205,47 +221,53 @@ struct DisplaySettingsView: View {
       Toggle("settings.display.translate-button", isOn: $userPreferences.showTranslateButton)
       Toggle("settings.display.pending-at-bottom", isOn: $userPreferences.pendingShownAtBottom)
       Toggle("settings.display.pending-left", isOn: $userPreferences.pendingShownLeft)
+      Toggle("settings.display.show-reply-indentation", isOn: $userPreferences.showReplyIndentation)
+      if userPreferences.showReplyIndentation {
+        VStack {
+          Slider(value: .init(get: {
+            Double(userPreferences.maxReplyIndentation)
+          }, set: { newVal in
+            userPreferences.maxReplyIndentation = UInt(newVal)
+          }), in: 1 ... 20, step: 1)
+          Text("settings.display.max-reply-indentation-\(String(userPreferences.maxReplyIndentation))")
+            .font(.scaledBody)
+        }
+        .alignmentGuide(.listRowSeparatorLeading) { d in
+          d[.leading]
+        }
+      }
+      Toggle("settings.display.show-account-popover", isOn: $userPreferences.showAccountPopover)
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   @ViewBuilder
   private var platformsSection: some View {
     @Bindable var userPreferences = userPreferences
-    if UIDevice.current.userInterfaceIdiom == .phone {
-      Section("iPhone") {
-        Toggle("settings.display.show-tab-label", isOn: $userPreferences.showiPhoneTabLabel)
-      }
-      .listRowBackground(theme.primaryBackgroundColor)
-    }
 
     if UIDevice.current.userInterfaceIdiom == .pad {
-      Section("iPad") {
+      Section("settings.display.section.platform") {
         Toggle("settings.display.show-ipad-column", isOn: $userPreferences.showiPadSecondaryColumn)
       }
+      #if !os(visionOS)
       .listRowBackground(theme.primaryBackgroundColor)
+      #endif
     }
   }
 
   private var resetSection: some View {
     Section {
       Button {
-        theme.followSystemColorScheme = true
-        theme.applySet(set: colorScheme == .dark ? .iceCubeDark : .iceCubeLight)
-        theme.avatarShape = .rounded
-        theme.avatarPosition = .top
-        theme.statusActionsDisplay = .full
-
-        localValues.tintColor = theme.tintColor
-        localValues.primaryBackgroundColor = theme.primaryBackgroundColor
-        localValues.secondaryBackgroundColor = theme.secondaryBackgroundColor
-        localValues.labelColor = theme.labelColor
-
+        theme.restoreDefault()
       } label: {
         Text("settings.display.restore")
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private var themeSelectorButton: some View {

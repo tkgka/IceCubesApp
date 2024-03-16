@@ -1,7 +1,6 @@
 import DesignSystem
 import Env
 import RevenueCat
-import Shimmer
 import SwiftUI
 
 @MainActor
@@ -69,23 +68,25 @@ struct SupportAppView: View {
       linksSection
     }
     .navigationTitle("settings.support.navigation-title")
-    .scrollContentBackground(.hidden)
-    .background(theme.secondaryBackgroundColor)
-    .alert("settings.support.alert.title", isPresented: $purchaseSuccessDisplayed, actions: {
-      Button { purchaseSuccessDisplayed = false } label: { Text("alert.button.ok") }
-    }, message: {
-      Text("settings.support.alert.message")
-    })
-    .alert("alert.error", isPresented: $purchaseErrorDisplayed, actions: {
-      Button { purchaseErrorDisplayed = false } label: { Text("alert.button.ok") }
-    }, message: {
-      Text("settings.support.alert.error.message")
-    })
-    .onAppear {
-      loadingProducts = true
-      fetchStoreProducts()
-      refreshUserInfo()
-    }
+    #if !os(visionOS)
+      .scrollContentBackground(.hidden)
+      .background(theme.secondaryBackgroundColor)
+    #endif
+      .alert("settings.support.alert.title", isPresented: $purchaseSuccessDisplayed, actions: {
+        Button { purchaseSuccessDisplayed = false } label: { Text("alert.button.ok") }
+      }, message: {
+        Text("settings.support.alert.message")
+      })
+      .alert("alert.error", isPresented: $purchaseErrorDisplayed, actions: {
+        Button { purchaseErrorDisplayed = false } label: { Text("alert.button.ok") }
+      }, message: {
+        Text("settings.support.alert.error.message")
+      })
+      .onAppear {
+        loadingProducts = true
+        fetchStoreProducts()
+        refreshUserInfo()
+      }
   }
 
   private func purchase(product: StoreProduct) async {
@@ -151,7 +152,9 @@ struct SupportAppView: View {
         Text("settings.support.message-from-dev")
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private var subscriptionSection: some View {
@@ -175,7 +178,7 @@ struct SupportAppView: View {
                 .font(.scaledSubheadline)
               Text(Tip.supporter.subtitle)
                 .font(.scaledFootnote)
-                .foregroundColor(.gray)
+                .foregroundStyle(.secondary)
             }
             Spacer()
             makePurchaseButton(product: subscription)
@@ -188,7 +191,9 @@ struct SupportAppView: View {
         Text("settings.support.supporter.subscription-info")
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private var tipsSection: some View {
@@ -204,7 +209,7 @@ struct SupportAppView: View {
                 .font(.scaledSubheadline)
               Text(tip.subtitle)
                 .font(.scaledFootnote)
-                .foregroundColor(.gray)
+                .foregroundStyle(.secondary)
             }
             Spacer()
             makePurchaseButton(product: product)
@@ -213,7 +218,9 @@ struct SupportAppView: View {
         }
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private var restorePurchase: some View {
@@ -232,7 +239,9 @@ struct SupportAppView: View {
     } footer: {
       Text("settings.support.restore-purchase.explanation")
     }
+    #if !os(visionOS)
     .listRowBackground(theme.secondaryBackgroundColor)
+    #endif
   }
 
   private var linksSection: some View {
@@ -252,7 +261,9 @@ struct SupportAppView: View {
         .buttonStyle(.borderless)
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.secondaryBackgroundColor)
+    #endif
   }
 
   private var loadingPlaceholder: some View {
@@ -262,12 +273,11 @@ struct SupportAppView: View {
           .font(.scaledSubheadline)
         Text("settings.support.placeholder.loading-subtitle")
           .font(.scaledFootnote)
-          .foregroundColor(.gray)
+          .foregroundStyle(.secondary)
       }
       .padding(.vertical, 8)
     }
     .redacted(reason: .placeholder)
     .allowsHitTesting(false)
-    .shimmering()
   }
 }

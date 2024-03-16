@@ -2,8 +2,9 @@ import Account
 import AppAccount
 import DesignSystem
 import Env
+import Models
 import Network
-import Status
+import StatusKit
 import SwiftUI
 import UIKit
 
@@ -26,13 +27,19 @@ class ShareViewController: UIViewController {
 
     if let item = extensionContext?.inputItems.first as? NSExtensionItem {
       if let attachments = item.attachments {
-        let view = StatusEditorView(mode: .shareExtension(items: attachments))
+        let view = StatusEditor.MainView(mode: .shareExtension(items: attachments))
           .environment(UserPreferences.shared)
           .environment(appAccountsManager)
           .environment(client)
           .environment(account)
           .environment(theme)
           .environment(instance)
+          .modelContainer(for: [
+            Draft.self,
+            LocalTimeline.self,
+            TagGroup.self,
+            RecentTag.self,
+          ])
           .tint(theme.tintColor)
           .preferredColorScheme(colorScheme == .light ? .light : .dark)
         let childView = UIHostingController(rootView: view)

@@ -6,7 +6,6 @@ import Models
 import Network
 import NukeUI
 import SafariServices
-import Shimmer
 import SwiftUI
 
 @MainActor
@@ -14,6 +13,7 @@ struct AddAccountView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.openURL) private var openURL
+  @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
   @Environment(AppAccountsManager.self) private var appAccountsManager
   @Environment(CurrentAccount.self) private var currentAccount
@@ -27,7 +27,9 @@ struct AddAccountView: View {
   @State private var signInClient: Client?
   @State private var instances: [InstanceSocial] = []
   @State private var instanceFetchError: LocalizedStringKey?
-  @State private var oauthURL: URL?
+  @State private var instanceSocialClient = InstanceSocialClient()
+  @State private var searchingTask = Task<Void, Never> {}
+  @State private var getInstanceDetailTask = Task<Void, Never> {}
 
   private let instanceNamePublisher = PassthroughSubject<String, Never>()
 
@@ -53,7 +55,9 @@ struct AddAccountView: View {
     NavigationStack {
       Form {
         TextField("instance.url", text: $instanceName)
+        #if !os(visionOS)
           .listRowBackground(theme.primaryBackgroundColor)
+        #endif
           .keyboardType(.URL)
           .textContentType(.URL)
           .textInputAutocapitalization(.never)
@@ -77,80 +81,76 @@ struct AddAccountView: View {
       .formStyle(.grouped)
       .navigationTitle("account.add.navigation-title")
       .navigationBarTitleDisplayMode(.inline)
-      .scrollContentBackground(.hidden)
-      .background(theme.secondaryBackgroundColor)
-      .scrollDismissesKeyboard(.immediately)
-      .toolbar {
-        if !appAccountsManager.availableAccounts.isEmpty {
-          ToolbarItem(placement: .navigationBarLeading) {
-            Button("action.cancel", action: { dismiss() })
-          }
-        }
-      }
-      .onAppear {
-        isInstanceURLFieldFocused = true
-        let client = InstanceSocialClient()
-        Task {
-          let instances = await client.fetchInstances()
-          withAnimation {
-            self.instances = instances
-          }
-        }
-        isSigninIn = false
-      }
-      .onChange(of: instanceName) { _, newValue in
-        instanceNamePublisher.send(newValue)
-      }
-      .onReceive(instanceNamePublisher.debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)) { _ in
-        // let newValue = newValue
-        //  .replacingOccurrences(of: "http://", with: "")
-        //  .replacingOccurrences(of: "https://", with: "")
-        let client = Client(server: sanitizedName)
-        Task {
-          do {
-            // bare bones preflight for domain validity
-            if client.server.contains("."), client.server.last != "." {
-              let instance: Instance = try await client.get(endpoint: Instances.instance)
-              withAnimation {
-                self.instance = instance
-                instanceName = sanitizedName // clean up the text box, principally to chop off the username if present so it's clear that you might not wind up siging in as the thing in the box
-              }
-              instanceFetchError = nil
-            } else {
-              instance = nil
-              instanceFetchError = nil
-            }
-          } catch _ as DecodingError {
-            instance = nil
-            instanceFetchError = "account.add.error.instance-not-supported"
-          } catch {
-            instance = nil
-          }
-        }
-      }
-      .onChange(of: scenePhase) { _, newValue in
-        switch newValue {
-        case .active:
-          isSigninIn = false
-        default:
-          break
-        }
-      }
-      .onOpenURL(perform: { url in
-        Task {
-          await continueSignIn(url: url)
-        }
-      })
-      .onChange(of: oauthURL) { _, newValue in
-        if newValue == nil {
-          isSigninIn = false
-        }
-      }
-      #if !targetEnvironment(macCatalyst)
-      .sheet(item: $oauthURL, content: { url in
-        SafariView(url: url)
-      })
+      #if !os(visionOS)
+        .scrollContentBackground(.hidden)
+        .background(theme.secondaryBackgroundColor)
+        .scrollDismissesKeyboard(.immediately)
       #endif
+        .toolbar {
+          if !appAccountsManager.availableAccounts.isEmpty {
+            CancelToolbarItem()
+          }
+        }
+        .onAppear {
+          isInstanceURLFieldFocused = true
+          Task {
+            let instances = await instanceSocialClient.fetchInstances(keyword: instanceName)
+            withAnimation {
+              self.instances = instances
+            }
+          }
+          isSigninIn = false
+        }
+        .onChange(of: instanceName) {
+          searchingTask.cancel()
+          searchingTask = Task {
+            try? await Task.sleep(for: .seconds(0.1))
+            guard !Task.isCancelled else { return }
+
+            let instances = await instanceSocialClient.fetchInstances(keyword: instanceName)
+            withAnimation {
+              self.instances = instances
+            }
+          }
+
+          getInstanceDetailTask.cancel()
+          getInstanceDetailTask = Task {
+            try? await Task.sleep(for: .seconds(0.1))
+            guard !Task.isCancelled else { return }
+
+            do {
+              // bare bones preflight for domain validity
+              let instanceDetailClient = Client(server: sanitizedName)
+              if
+                instanceDetailClient.server.contains("."),
+                instanceDetailClient.server.last != "."
+              {
+                let instance: Instance = try await instanceDetailClient.get(endpoint: Instances.instance)
+                withAnimation {
+                  self.instance = instance
+                  instanceName = sanitizedName // clean up the text box, principally to chop off the username if present so it's clear that you might not wind up siging in as the thing in the box
+                }
+                instanceFetchError = nil
+              } else {
+                instance = nil
+                instanceFetchError = nil
+              }
+            } catch _ as DecodingError {
+              instance = nil
+              instanceFetchError = "account.add.error.instance-not-supported"
+            } catch {
+              instance = nil
+            }
+          }
+        }
+        .onChange(of: scenePhase) { _, newValue in
+          switch newValue {
+          case .active:
+            isSigninIn = false
+          default:
+            break
+          }
+        }
     }
   }
 
@@ -179,7 +179,9 @@ struct AddAccountView: View {
       }
       .buttonStyle(.borderedProminent)
     }
+    #if !os(visionOS)
     .listRowBackground(theme.tintColor)
+    #endif
   }
 
   private var instancesListView: some View {
@@ -187,28 +189,63 @@ struct AddAccountView: View {
       if instances.isEmpty {
         placeholderRow
       } else {
-        ForEach(sanitizedName.isEmpty ? instances : instances.filter { $0.name.contains(sanitizedName.lowercased()) }) { instance in
+        ForEach(instances) { instance in
           Button {
             instanceName = instance.name
           } label: {
             VStack(alignment: .leading, spacing: 4) {
-              Text(instance.name)
-                .font(.scaledHeadline)
-                .foregroundColor(.primary)
-              Text(instance.info?.shortDescription ?? "")
-                .font(.scaledBody)
-                .foregroundColor(.gray)
-              (Text("instance.list.users-\(instance.users)")
-                + Text("  ⸱  ")
-                + Text("instance.list.posts-\(instance.statuses)"))
-                .font(.scaledFootnote)
-                .foregroundColor(.gray)
+              LazyImage(url: instance.thumbnail) { state in
+                if let image = state.image {
+                  image
+                    .resizable()
+                    .scaledToFill()
+                } else {
+                  Rectangle().fill(theme.tintColor.opacity(0.1))
+                }
+              }
+              .frame(height: 100)
+              .frame(maxWidth: .infinity)
+              .clipped()
+
+              VStack(alignment: .leading) {
+                HStack {
+                  Text(instance.name)
+                    .font(.scaledHeadline)
+                    .foregroundColor(.primary)
+                  Spacer()
+                  (Text("instance.list.users-\(formatAsNumber(instance.users))")
+                    + Text("  ⸱  ")
+                    + Text("instance.list.posts-\(formatAsNumber(instance.statuses))"))
+                    .foregroundStyle(theme.tintColor)
+                }
+                .padding(.bottom, 5)
+                Text(instance.info?.shortDescription?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+                  .foregroundStyle(Color.secondary)
+                  .lineLimit(10)
+              }
+              .font(.scaledFootnote)
+              .padding(10)
             }
           }
-          .listRowBackground(theme.primaryBackgroundColor)
+          #if !os(visionOS)
+          .background(theme.primaryBackgroundColor)
+          .listRowBackground(Color.clear)
+          .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
+          .listRowSeparator(.hidden)
+          .clipShape(RoundedRectangle(cornerRadius: 4))
+          #endif
         }
       }
     }
+  }
+
+  private func formatAsNumber(_ string: String) -> String {
+    (Int(string) ?? 0)
+      .formatted(
+        .number
+          .notation(.compactName)
+          .locale(.current)
+      )
   }
 
   private var placeholderRow: some View {
@@ -218,30 +255,26 @@ struct AddAccountView: View {
         .foregroundColor(.primary)
       Text("placeholder.loading.long")
         .font(.scaledBody)
-        .foregroundColor(.gray)
+        .foregroundStyle(.secondary)
       Text("placeholder.loading.short")
         .font(.scaledFootnote)
-        .foregroundColor(.gray)
+        .foregroundStyle(.secondary)
     }
     .redacted(reason: .placeholder)
     .allowsHitTesting(false)
-    .shimmering()
-    .listRowBackground(theme.primaryBackgroundColor)
+    #if !os(visionOS)
+      .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private func signIn() async {
-    do {
-      signInClient = .init(server: sanitizedName)
-      if let oauthURL = try await signInClient?.oauthURL() {
-        if ProcessInfo.processInfo.isMacCatalystApp {
-          openURL(oauthURL)
-        } else {
-          self.oauthURL = oauthURL
-        }
-      } else {
-        isSigninIn = false
-      }
-    } catch {
+    signInClient = .init(server: sanitizedName)
+    if let oauthURL = try? await signInClient?.oauthURL(),
+       let url = try? await webAuthenticationSession.authenticate(using: oauthURL,
+                                                                  callbackURLScheme: AppInfo.scheme.replacingOccurrences(of: "://", with: ""))
+    {
+      await continueSignIn(url: url)
+    } else {
       isSigninIn = false
     }
   }
@@ -252,7 +285,6 @@ struct AddAccountView: View {
       return
     }
     do {
-      oauthURL = nil
       let oauthToken = try await client.continueOauthFlow(url: url)
       let client = Client(server: client.server, oauthToken: oauthToken)
       let account: Account = try await client.get(endpoint: Accounts.verifyCredentials)
@@ -266,18 +298,7 @@ struct AddAccountView: View {
       isSigninIn = false
       dismiss()
     } catch {
-      oauthURL = nil
       isSigninIn = false
     }
   }
-}
-
-struct SafariView: UIViewControllerRepresentable {
-  let url: URL
-
-  func makeUIViewController(context _: UIViewControllerRepresentableContext<SafariView>) -> SFSafariViewController {
-    SFSafariViewController(url: url)
-  }
-
-  func updateUIViewController(_: SFSafariViewController, context _: UIViewControllerRepresentableContext<SafariView>) {}
 }

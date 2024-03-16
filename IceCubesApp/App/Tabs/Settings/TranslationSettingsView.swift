@@ -21,7 +21,9 @@ struct TranslationSettingsView: View {
         .onAppear {
           readValue()
         }
+        #if !os(visionOS)
         .listRowBackground(theme.primaryBackgroundColor)
+        #endif
 
         if apiKey.isEmpty {
           Section {
@@ -30,18 +32,22 @@ struct TranslationSettingsView: View {
                 .foregroundColor(.red)
             }
           }
+          #if !os(visionOS)
           .listRowBackground(theme.primaryBackgroundColor)
+          #endif
         }
       }
       autoDetectSection
     }
     .navigationTitle("settings.translation.navigation-title")
-    .scrollContentBackground(.hidden)
-    .background(theme.secondaryBackgroundColor)
-    .onChange(of: apiKey) {
-      writeNewValue()
-    }
-    .onAppear(perform: updatePrefs)
+    #if !os(visionOS)
+      .scrollContentBackground(.hidden)
+      .background(theme.secondaryBackgroundColor)
+    #endif
+      .onChange(of: apiKey) {
+        writeNewValue()
+      }
+      .onAppear(perform: updatePrefs)
   }
 
   @ViewBuilder
@@ -50,7 +56,9 @@ struct TranslationSettingsView: View {
     Toggle(isOn: $preferences.alwaysUseDeepl) {
       Text("settings.translation.always-deepl")
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   @ViewBuilder

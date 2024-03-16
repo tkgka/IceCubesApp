@@ -12,8 +12,11 @@ public struct AppAccountView: View {
 
   @State var viewModel: AppAccountViewModel
 
-  public init(viewModel: AppAccountViewModel) {
+  @Binding var isParentPresented: Bool
+
+  public init(viewModel: AppAccountViewModel, isParentPresented: Binding<Bool>) {
     self.viewModel = viewModel
+    _isParentPresented = isParentPresented
   }
 
   public var body: some View {
@@ -35,7 +38,7 @@ public struct AppAccountView: View {
   private var compactView: some View {
     HStack {
       if let account = viewModel.account {
-        AvatarView(account: account)
+        AvatarView(account.avatar)
       } else {
         ProgressView()
       }
@@ -47,8 +50,14 @@ public struct AppAccountView: View {
       if appAccounts.currentAccount.id == viewModel.appAccount.id,
          let account = viewModel.account
       {
-        routerPath.navigate(to: .accountSettingsWithAccount(account: account, appAccount: viewModel.appAccount))
-        HapticManager.shared.fireHaptic(.buttonPress)
+        if viewModel.isInSettings {
+          routerPath.navigate(to: .accountSettingsWithAccount(account: account, appAccount: viewModel.appAccount))
+          HapticManager.shared.fireHaptic(.buttonPress)
+        } else {
+          isParentPresented = false
+          routerPath.navigate(to: .accountDetailWithAccount(account: account))
+          HapticManager.shared.fireHaptic(.buttonPress)
+        }
       } else {
         var transation = Transaction()
         transation.disablesAnimations = true
@@ -61,7 +70,7 @@ public struct AppAccountView: View {
       HStack {
         if let account = viewModel.account {
           ZStack(alignment: .topTrailing) {
-            AvatarView(account: account)
+            AvatarView(account.avatar)
             if viewModel.appAccount.id == appAccounts.currentAccount.id {
               Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.white, .green)
@@ -86,7 +95,7 @@ public struct AppAccountView: View {
           ProgressView()
           Text(viewModel.appAccount.accountName ?? viewModel.acct)
             .font(.scaledSubheadline)
-            .foregroundColor(.gray)
+            .foregroundStyle(Color.secondary)
             .padding(.leading, 6)
         }
         VStack(alignment: .leading) {
@@ -95,15 +104,15 @@ public struct AppAccountView: View {
               .foregroundColor(theme.labelColor)
             Text("\(account.username)@\(viewModel.appAccount.server)")
               .font(.scaledSubheadline)
-              .emojiSize(Font.scaledSubheadlineFont.emojiSize)
-              .emojiBaselineOffset(Font.scaledSubheadlineFont.emojiBaselineOffset)
-              .foregroundColor(.gray)
+              .emojiText.size(Font.scaledSubheadlineFont.emojiSize)
+              .emojiText.baselineOffset(Font.scaledSubheadlineFont.emojiBaselineOffset)
+              .foregroundStyle(Color.secondary)
           }
         }
-        if viewModel.isInNavigation {
+        if viewModel.isInSettings {
           Spacer()
           Image(systemName: "chevron.right")
-            .foregroundColor(.gray)
+            .foregroundStyle(.secondary)
         }
       }
     }

@@ -8,7 +8,7 @@ import LinkPresentation
 import Lists
 import MediaUI
 import Models
-import Status
+import StatusKit
 import SwiftUI
 import Timeline
 
@@ -33,11 +33,13 @@ extension View {
         ConversationDetailView(conversation: conversation)
       case let .hashTag(tag, accountId):
         TimelineView(timeline: .constant(.hashtag(tag: tag, accountId: accountId)),
+                     pinnedFilters: .constant([]),
                      selectedTagGroup: .constant(nil),
                      scrollToTopSignal: .constant(0),
                      canFilterTimeline: false)
       case let .list(list):
         TimelineView(timeline: .constant(.list(list: list)),
+                     pinnedFilters: .constant([]),
                      selectedTagGroup: .constant(nil),
                      scrollToTopSignal: .constant(0),
                      canFilterTimeline: false)
@@ -53,11 +55,12 @@ extension View {
         AccountsListView(mode: .accountsList(accounts: accounts))
       case .trendingTimeline:
         TimelineView(timeline: .constant(.trending),
+                     pinnedFilters: .constant([]),
                      selectedTagGroup: .constant(nil),
                      scrollToTopSignal: .constant(0),
                      canFilterTimeline: false)
       case let .trendingLinks(cards):
-        CardsListView(cards: cards)
+        TrendingLinksListView(cards: cards)
       case let .tagsList(tags):
         TagsListView(tags: tags)
       }
@@ -68,19 +71,25 @@ extension View {
     sheet(item: sheetDestinations) { destination in
       switch destination {
       case let .replyToStatusEditor(status):
-        StatusEditorView(mode: .replyTo(status: status))
+        StatusEditor.MainView(mode: .replyTo(status: status))
           .withEnvironments()
       case let .newStatusEditor(visibility):
-        StatusEditorView(mode: .new(visibility: visibility))
+        StatusEditor.MainView(mode: .new(visibility: visibility))
           .withEnvironments()
       case let .editStatusEditor(status):
-        StatusEditorView(mode: .edit(status: status))
+        StatusEditor.MainView(mode: .edit(status: status))
           .withEnvironments()
       case let .quoteStatusEditor(status):
-        StatusEditorView(mode: .quote(status: status))
+        StatusEditor.MainView(mode: .quote(status: status))
+          .withEnvironments()
+      case let .quoteLinkStatusEditor(link):
+        StatusEditor.MainView(mode: .quoteLink(link: link))
           .withEnvironments()
       case let .mentionStatusEditor(account, visibility):
-        StatusEditorView(mode: .mention(account: account, visibility: visibility))
+        StatusEditor.MainView(mode: .mention(account: account, visibility: visibility))
+          .withEnvironments()
+      case .listCreate:
+        ListCreateView()
           .withEnvironments()
       case let .listEdit(list):
         ListEditView(list: list)
@@ -106,18 +115,36 @@ extension View {
           .preferredColorScheme(Theme.shared.selectedScheme == .dark ? .dark : .light)
       case .accountPushNotficationsSettings:
         if let subscription = PushNotificationsService.shared.subscriptions.first(where: { $0.account.token == AppAccountsManager.shared.currentAccount.oauthToken }) {
-          PushNotificationsView(subscription: subscription)
+          NavigationSheet { PushNotificationsView(subscription: subscription) }
             .withEnvironments()
         } else {
           EmptyView()
         }
+      case .about:
+        NavigationSheet { AboutView() }
+          .withEnvironments()
+      case .support:
+        NavigationSheet { SupportAppView() }
+          .withEnvironments()
       case let .report(status):
         ReportView(status: status)
           .withEnvironments()
       case let .shareImage(image, status):
         ActivityView(image: image, status: status)
+          .withEnvironments()
       case let .editTagGroup(tagGroup, onSaved):
-        EditTagGroupView(editingTagGroup: tagGroup, onSaved: onSaved)
+        EditTagGroupView(tagGroup: tagGroup, onSaved: onSaved)
+          .withEnvironments()
+      case .timelineContentFilter:
+        NavigationSheet { TimelineContentFilterView() }
+          .presentationDetents([.medium])
+          .presentationBackground(.thinMaterial)
+          .withEnvironments()
+      case .accountEditInfo:
+        EditAccountView()
+          .withEnvironments()
+      case .accountFiltersList:
+        FiltersListView()
           .withEnvironments()
       }
     }
@@ -139,6 +166,7 @@ extension View {
       Draft.self,
       LocalTimeline.self,
       TagGroup.self,
+      RecentTag.self,
     ])
   }
 }

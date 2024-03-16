@@ -34,16 +34,16 @@ public struct FiltersListView: View {
                       .font(.scaledSubheadline)
                     Text("\(filter.context.map(\.name).joined(separator: ", "))")
                       .font(.scaledBody)
-                      .foregroundColor(.gray)
+                      .foregroundStyle(.secondary)
                     if filter.hasExpiry() {
                       if filter.isExpired() {
                         Text("filter.expired")
                           .font(.footnote)
-                          .foregroundColor(.gray)
+                          .foregroundStyle(.secondary)
                       } else {
                         Text("filter.expiry-\(filter.expiresAt!.relativeFormatted)")
                           .font(.footnote)
-                          .foregroundColor(.gray)
+                          .foregroundStyle(.secondary)
                       }
                     }
                   }
@@ -54,7 +54,9 @@ public struct FiltersListView: View {
               }
             }
           }
+          #if !os(visionOS)
           .listRowBackground(theme.primaryBackgroundColor)
+          #endif
         }
 
         Section {
@@ -62,24 +64,28 @@ public struct FiltersListView: View {
             Label("filter.new", systemImage: "plus")
           }
         }
+        #if !os(visionOS)
         .listRowBackground(theme.primaryBackgroundColor)
+        #endif
       }
       .toolbar {
         toolbarContent
       }
       .navigationTitle("filter.filters")
       .navigationBarTitleDisplayMode(.inline)
-      .scrollContentBackground(.hidden)
-      .background(theme.secondaryBackgroundColor)
-      .task {
-        do {
-          isLoading = true
-          filters = try await client.get(endpoint: ServerFilters.filters, forceVersion: .v2)
-          isLoading = false
-        } catch {
-          isLoading = false
+      #if !os(visionOS)
+        .scrollContentBackground(.hidden)
+        .background(theme.secondaryBackgroundColor)
+      #endif
+        .task {
+          do {
+            isLoading = true
+            filters = try await client.get(endpoint: ServerFilters.filters, forceVersion: .v2)
+            isLoading = false
+          } catch {
+            isLoading = false
+          }
         }
-      }
     }
   }
 

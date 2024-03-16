@@ -46,7 +46,9 @@ public struct ConversationDetailView: View {
         }
         .padding(.horizontal, .layoutPadding)
       }
+      #if !os(visionOS)
       .scrollDismissesKeyboard(.interactively)
+      #endif
       .safeAreaInset(edge: .bottom) {
         inputTextView
       }
@@ -68,34 +70,36 @@ public struct ConversationDetailView: View {
       }
     }
     .navigationBarTitleDisplayMode(.inline)
-    .scrollContentBackground(.hidden)
-    .background(theme.primaryBackgroundColor)
-    .toolbar {
-      ToolbarItem(placement: .principal) {
-        if viewModel.conversation.accounts.count == 1,
-           let account = viewModel.conversation.accounts.first
-        {
-          EmojiTextApp(.init(stringValue: account.safeDisplayName), emojis: account.emojis)
-            .font(.scaledHeadline)
-            .foregroundColor(theme.labelColor)
-            .emojiSize(Font.scaledHeadlineFont.emojiSize)
-            .emojiBaselineOffset(Font.scaledHeadlineFont.emojiBaselineOffset)
-        } else {
-          Text("Direct message with \(viewModel.conversation.accounts.count) people")
-            .font(.scaledHeadline)
-        }
-      }
-    }
-    .onChange(of: watcher.latestEvent?.id) {
-      if let latestEvent = watcher.latestEvent {
-        viewModel.handleEvent(event: latestEvent)
-        DispatchQueue.main.async {
-          withAnimation {
-            scrollProxy?.scrollTo(Constants.bottomAnchor, anchor: .bottom)
+    #if !os(visionOS)
+      .scrollContentBackground(.hidden)
+      .background(theme.primaryBackgroundColor)
+    #endif
+      .toolbar {
+        ToolbarItem(placement: .principal) {
+          if viewModel.conversation.accounts.count == 1,
+             let account = viewModel.conversation.accounts.first
+          {
+            EmojiTextApp(.init(stringValue: account.safeDisplayName), emojis: account.emojis)
+              .font(.scaledHeadline)
+              .foregroundColor(theme.labelColor)
+              .emojiText.size(Font.scaledHeadlineFont.emojiSize)
+              .emojiText.baselineOffset(Font.scaledHeadlineFont.emojiBaselineOffset)
+          } else {
+            Text("Direct message with \(viewModel.conversation.accounts.count) people")
+              .font(.scaledHeadline)
           }
         }
       }
-    }
+      .onChange(of: watcher.latestEvent?.id) {
+        if let latestEvent = watcher.latestEvent {
+          viewModel.handleEvent(event: latestEvent)
+          DispatchQueue.main.async {
+            withAnimation {
+              scrollProxy?.scrollTo(Constants.bottomAnchor, anchor: .bottom)
+            }
+          }
+        }
+      }
   }
 
   private var loadingView: some View {

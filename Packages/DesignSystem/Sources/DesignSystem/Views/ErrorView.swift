@@ -27,7 +27,7 @@ public struct ErrorView: View {
         Text(message)
           .font(.scaledSubheadline)
           .multilineTextAlignment(.center)
-          .foregroundColor(.gray)
+          .foregroundStyle(.secondary)
         Button {
           onButtonPress()
         } label: {
@@ -41,4 +41,10 @@ public struct ErrorView: View {
       Spacer()
     }
   }
+}
+
+#Preview {
+  ErrorView(title: "Error",
+            message: "Error loading. Please try again",
+            buttonTitle: "Retry") {}
 }

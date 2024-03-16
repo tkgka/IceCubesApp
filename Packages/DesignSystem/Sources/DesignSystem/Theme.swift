@@ -1,8 +1,10 @@
 import Combine
 import SwiftUI
 
-@Observable public class Theme {
-  class ThemeStorage {
+@MainActor
+@Observable
+public final class Theme {
+  final class ThemeStorage {
     enum ThemeKey: String {
       case colorScheme, tint, label, primaryBackground, secondaryBackground
       case avatarPosition2, avatarShape2, statusActionsDisplay, statusDisplayStyle
@@ -10,6 +12,7 @@ import SwiftUI
       case followSystemColorSchme
       case displayFullUsernameTimeline
       case lineSpacing
+      case statusActionSecondary
     }
 
     @AppStorage("is_previously_set") public var isThemePreviouslySet: Bool = false
@@ -18,14 +21,15 @@ import SwiftUI
     @AppStorage(ThemeKey.primaryBackground.rawValue) public var primaryBackgroundColor: Color = .white
     @AppStorage(ThemeKey.secondaryBackground.rawValue) public var secondaryBackgroundColor: Color = .gray
     @AppStorage(ThemeKey.label.rawValue) public var labelColor: Color = .black
-    @AppStorage(ThemeKey.avatarPosition2.rawValue) var avatarPosition: AvatarPosition = .top
-    @AppStorage(ThemeKey.avatarShape2.rawValue) var avatarShape: AvatarShape = .rounded
+    @AppStorage(ThemeKey.avatarPosition2.rawValue) var avatarPosition: AvatarPosition = .leading
+    @AppStorage(ThemeKey.avatarShape2.rawValue) var avatarShape: AvatarShape = .circle
     @AppStorage(ThemeKey.selectedSet.rawValue) var storedSet: ColorSetName = .iceCubeDark
     @AppStorage(ThemeKey.statusActionsDisplay.rawValue) public var statusActionsDisplay: StatusActionsDisplay = .full
     @AppStorage(ThemeKey.statusDisplayStyle.rawValue) public var statusDisplayStyle: StatusDisplayStyle = .large
     @AppStorage(ThemeKey.followSystemColorSchme.rawValue) public var followSystemColorScheme: Bool = true
-    @AppStorage(ThemeKey.displayFullUsernameTimeline.rawValue) public var displayFullUsername: Bool = true
-    @AppStorage(ThemeKey.lineSpacing.rawValue) public var lineSpacing: Double = 0.8
+    @AppStorage(ThemeKey.displayFullUsernameTimeline.rawValue) public var displayFullUsername: Bool = false
+    @AppStorage(ThemeKey.lineSpacing.rawValue) public var lineSpacing: Double = 1.2
+    @AppStorage(ThemeKey.statusActionSecondary.rawValue) public var statusActionSecondary: StatusActionSecondary = .share
     @AppStorage("font_size_scale") public var fontSizeScale: Double = 1
     @AppStorage("chosen_font") public var chosenFontData: Data?
 
@@ -64,6 +68,19 @@ import SwiftUI
         "enum.avatar-position.leading"
       case .top:
         "enum.avatar-position.top"
+      }
+    }
+  }
+
+  public enum StatusActionSecondary: String, CaseIterable {
+    case share, bookmark
+
+    public var description: LocalizedStringKey {
+      switch self {
+      case .share:
+        "status.action.share-title"
+      case .bookmark:
+        "status.action.bookmark"
       }
     }
   }
@@ -152,12 +169,14 @@ import SwiftUI
   public var tintColor: Color {
     didSet {
       themeStorage.tintColor = tintColor
+      computeContrastingTintColor()
     }
   }
 
   public var primaryBackgroundColor: Color {
     didSet {
       themeStorage.primaryBackgroundColor = primaryBackgroundColor
+      computeContrastingTintColor()
     }
   }
 
@@ -170,6 +189,31 @@ import SwiftUI
   public var labelColor: Color {
     didSet {
       themeStorage.labelColor = labelColor
+      computeContrastingTintColor()
+    }
+  }
+
+  public private(set) var contrastingTintColor: Color
+
+  // set contrastingTintColor to either labelColor or primaryBackgroundColor, whichever contrasts
+  // better against the tintColor
+  private func computeContrastingTintColor() {
+    func luminance(_ color: Color.Resolved) -> Float {
+      return 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue
+    }
+
+    let resolvedTintColor = tintColor.resolve(in: .init())
+    let resolvedLabelColor = labelColor.resolve(in: .init())
+    let resolvedPrimaryBackgroundColor = primaryBackgroundColor.resolve(in: .init())
+
+    let tintLuminance = luminance(resolvedTintColor)
+    let labelLuminance = luminance(resolvedLabelColor)
+    let primaryBackgroundLuminance = luminance(resolvedPrimaryBackgroundColor)
+
+    if abs(tintLuminance - labelLuminance) > abs(tintLuminance - primaryBackgroundLuminance) {
+      contrastingTintColor = labelColor
+    } else {
+      contrastingTintColor = primaryBackgroundColor
     }
   }
 
@@ -200,6 +244,12 @@ import SwiftUI
   public var statusDisplayStyle: StatusDisplayStyle {
     didSet {
       themeStorage.statusDisplayStyle = statusDisplayStyle
+    }
+  }
+
+  public var statusActionSecondary: StatusActionSecondary {
+    didSet {
+      themeStorage.statusActionSecondary = statusActionSecondary
     }
   }
 
@@ -237,6 +287,22 @@ import SwiftUI
 
   public static let shared = Theme()
 
+  public func restoreDefault() {
+    applySet(set: themeStorage.selectedScheme == .dark ? .iceCubeDark : .iceCubeLight)
+    isThemePreviouslySet = true
+    avatarPosition = .leading
+    avatarShape = .circle
+    storedSet = selectedSet
+    statusActionsDisplay = .full
+    statusDisplayStyle = .large
+    followSystemColorScheme = true
+    displayFullUsername = false
+    lineSpacing = 1.2
+    fontSizeScale = 1
+    chosenFontData = nil
+    statusActionSecondary = .share
+  }
+
   private init() {
     isThemePreviouslySet = themeStorage.isThemePreviouslySet
     selectedScheme = themeStorage.selectedScheme
@@ -244,6 +310,7 @@ import SwiftUI
     primaryBackgroundColor = themeStorage.primaryBackgroundColor
     secondaryBackgroundColor = themeStorage.secondaryBackgroundColor
     labelColor = themeStorage.labelColor
+    contrastingTintColor = .red // real work done in computeContrastingTintColor()
     avatarPosition = themeStorage.avatarPosition
     avatarShape = themeStorage.avatarShape
     storedSet = themeStorage.storedSet
@@ -254,7 +321,10 @@ import SwiftUI
     lineSpacing = themeStorage.lineSpacing
     fontSizeScale = themeStorage.fontSizeScale
     chosenFontData = themeStorage.chosenFontData
+    statusActionSecondary = themeStorage.statusActionSecondary
     selectedSet = storedSet
+
+    computeContrastingTintColor()
   }
 
   public static var allColorSet: [ColorSet] {
@@ -271,6 +341,8 @@ import SwiftUI
       MediumDark(),
       ConstellationLight(),
       ConstellationDark(),
+      ThreadsLight(),
+      ThreadsDark(),
     ]
   }
 

@@ -27,7 +27,7 @@ struct ConversationMessageView: View {
         if isOwnMessage {
           Spacer()
         } else {
-          AvatarView(account: message.account, config: .status)
+          AvatarView(message.account.avatar)
             .onTapGesture {
               routerPath.navigate(to: .accountDetailWithAccount(account: message.account))
             }
@@ -36,14 +36,18 @@ struct ConversationMessageView: View {
           EmojiTextApp(message.content, emojis: message.emojis)
             .font(.scaledBody)
             .foregroundColor(theme.labelColor)
-            .emojiSize(Font.scaledBodyFont.emojiSize)
-            .emojiBaselineOffset(Font.scaledBodyFont.emojiBaselineOffset)
+            .emojiText.size(Font.scaledBodyFont.emojiSize)
+            .emojiText.baselineOffset(Font.scaledBodyFont.emojiBaselineOffset)
             .padding(6)
             .environment(\.openURL, OpenURLAction { url in
               routerPath.handleStatus(status: message, url: url)
             })
         }
+        #if os(visionOS)
+        .background(isOwnMessage ? Material.ultraThick : Material.regular)
+        #else
         .background(isOwnMessage ? theme.tintColor.opacity(0.2) : theme.secondaryBackgroundColor)
+        #endif
         .cornerRadius(8)
         .padding(.leading, isOwnMessage ? 24 : 0)
         .padding(.trailing, isOwnMessage ? 0 : 24)
@@ -78,7 +82,7 @@ struct ConversationMessageView: View {
             Text(message.createdAt.asDate, style: .time)
           }
           .font(.scaledFootnote)
-          .foregroundColor(.gray)
+          .foregroundStyle(.secondary)
           if !isOwnMessage {
             Spacer()
           }
@@ -201,12 +205,12 @@ struct ConversationMessageView: View {
     .frame(height: 200)
     .contentShape(Rectangle())
     .onTapGesture {
-      if ProcessInfo.processInfo.isMacCatalystApp {
+      #if targetEnvironment(macCatalyst) || os(visionOS)
         openWindow(value: WindowDestinationMedia.mediaViewer(attachments: [attachement],
-                                                        selectedAttachment: attachement))
-      } else {
+                                                             selectedAttachment: attachement))
+      #else
         quickLook.prepareFor(selectedMediaAttachment: attachement, mediaAttachments: [attachement])
-      }
+      #endif
     }
   }
 

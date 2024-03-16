@@ -4,7 +4,6 @@ import Env
 import Models
 import Network
 import NukeUI
-import Shimmer
 import SwiftUI
 
 @MainActor
@@ -52,30 +51,30 @@ struct AddRemoteTimelineView: View {
       .formStyle(.grouped)
       .navigationTitle("timeline.add-remote.title")
       .navigationBarTitleDisplayMode(.inline)
-      .scrollContentBackground(.hidden)
-      .background(theme.secondaryBackgroundColor)
-      .scrollDismissesKeyboard(.immediately)
-      .toolbar {
-        ToolbarItem(placement: .navigationBarLeading) {
-          Button("action.cancel", action: { dismiss() })
+      #if !os(visionOS)
+        .scrollContentBackground(.hidden)
+        .background(theme.secondaryBackgroundColor)
+        .scrollDismissesKeyboard(.immediately)
+      #endif
+        .toolbar {
+          CancelToolbarItem()
         }
-      }
-      .onChange(of: instanceName) { _, newValue in
-        instanceNamePublisher.send(newValue)
-      }
-      .onReceive(instanceNamePublisher.debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)) { newValue in
-        Task {
-          let client = Client(server: newValue)
-          instance = try? await client.get(endpoint: Instances.instance)
+        .onChange(of: instanceName) { _, newValue in
+          instanceNamePublisher.send(newValue)
         }
-      }
-      .onAppear {
-        isInstanceURLFieldFocused = true
-        let client = InstanceSocialClient()
-        Task {
-          instances = await client.fetchInstances()
+        .onReceive(instanceNamePublisher.debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)) { newValue in
+          Task {
+            let client = Client(server: newValue)
+            instance = try? await client.get(endpoint: Instances.instance)
+          }
         }
-      }
+        .onAppear {
+          isInstanceURLFieldFocused = true
+          let client = InstanceSocialClient()
+          Task {
+            instances = await client.fetchInstances(keyword: instanceName)
+          }
+        }
     }
   }
 
@@ -95,13 +94,13 @@ struct AddRemoteTimelineView: View {
                 .foregroundColor(.primary)
               Text(instance.info?.shortDescription ?? "")
                 .font(.scaledBody)
-                .foregroundColor(.gray)
+                .foregroundStyle(Color.secondary)
 
               (Text("instance.list.users-\(instance.users)")
                 + Text("  ⸱  ")
                 + Text("instance.list.posts-\(instance.statuses)"))
                 .font(.scaledFootnote)
-                .foregroundColor(.gray)
+                .foregroundStyle(Color.secondary)
             }
           }
           .listRowBackground(theme.primaryBackgroundColor)

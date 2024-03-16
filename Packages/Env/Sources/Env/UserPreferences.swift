@@ -14,7 +14,7 @@ import SwiftUI
     @AppStorage("is_open_ai_enabled") public var isOpenAIEnabled: Bool = true
 
     @AppStorage("recently_used_languages") public var recentlyUsedLanguages: [String] = []
-    @AppStorage("social_keyboard_composer") public var isSocialKeyboardEnabled: Bool = true
+    @AppStorage("social_keyboard_composer") public var isSocialKeyboardEnabled: Bool = false
 
     @AppStorage("use_instance_content_settings") public var useInstanceContentSettings: Bool = true
     @AppStorage("app_auto_expand_spoilers") public var appAutoExpandSpoilers = false
@@ -22,12 +22,12 @@ import SwiftUI
     @AppStorage("app_default_post_visibility") public var appDefaultPostVisibility: Models.Visibility = .pub
     @AppStorage("app_default_reply_visibility") public var appDefaultReplyVisibility: Models.Visibility = .pub
     @AppStorage("app_default_posts_sensitive") public var appDefaultPostsSensitive = false
+    @AppStorage("app_require_alt_text") public var appRequireAltText = false
     @AppStorage("autoplay_video") public var autoPlayVideo = true
+    @AppStorage("mute_video") public var muteVideo = true
     @AppStorage("always_use_deepl") public var alwaysUseDeepl = false
     @AppStorage("user_deepl_api_free") public var userDeeplAPIFree = true
     @AppStorage("auto_detect_post_language") public var autoDetectPostLanguage = true
-
-    @AppStorage("suppress_dupe_reblogs") public var suppressDupeReblogs: Bool = false
 
     @AppStorage("inAppBrowserReaderView") public var inAppBrowserReaderView = false
 
@@ -52,7 +52,14 @@ import SwiftUI
 
     @AppStorage("collapse-long-posts") public var collapseLongPosts = true
 
-    @AppStorage("share-button-behavior") public var shareButtonBehavior: PreferredShareButtonBehavior = .linkAndText
+    @AppStorage("share-button-behavior") public var shareButtonBehavior: PreferredShareButtonBehavior = .linkOnly
+
+    @AppStorage("fast_refresh") public var fastRefreshEnabled: Bool = false
+
+    @AppStorage("max_reply_indentation") public var maxReplyIndentation: UInt = 7
+    @AppStorage("show_reply_indentation") public var showReplyIndentation: Bool = true
+
+    @AppStorage("show_account_popover") public var showAccountPopover: Bool = true
 
     init() {}
   }
@@ -158,9 +165,21 @@ import SwiftUI
     }
   }
 
+  public var appRequireAltText: Bool {
+    didSet {
+      storage.appRequireAltText = appRequireAltText
+    }
+  }
+
   public var autoPlayVideo: Bool {
     didSet {
       storage.autoPlayVideo = autoPlayVideo
+    }
+  }
+
+  public var muteVideo: Bool {
+    didSet {
+      storage.muteVideo = muteVideo
     }
   }
 
@@ -179,12 +198,6 @@ import SwiftUI
   public var autoDetectPostLanguage: Bool {
     didSet {
       storage.autoDetectPostLanguage = autoDetectPostLanguage
-    }
-  }
-
-  public var suppressDupeReblogs: Bool {
-    didSet {
-      storage.suppressDupeReblogs = suppressDupeReblogs
     }
   }
 
@@ -290,6 +303,34 @@ import SwiftUI
     }
   }
 
+  public var fastRefreshEnabled: Bool {
+    didSet {
+      storage.fastRefreshEnabled = fastRefreshEnabled
+    }
+  }
+
+  public var maxReplyIndentation: UInt {
+    didSet {
+      storage.maxReplyIndentation = maxReplyIndentation
+    }
+  }
+
+  public var showReplyIndentation: Bool {
+    didSet {
+      storage.showReplyIndentation = showReplyIndentation
+    }
+  }
+
+  public var showAccountPopover: Bool {
+    didSet {
+      storage.showAccountPopover = showAccountPopover
+    }
+  }
+
+  public func getRealMaxIndent() -> UInt {
+    showReplyIndentation ? maxReplyIndentation : 0
+  }
+
   public enum SwipeActionsIconStyle: String, CaseIterable {
     case iconWithText, iconOnly
 
@@ -373,7 +414,7 @@ import SwiftUI
   }
 
   public var totalNotificationsCount: Int {
-    notificationsCount.compactMap{ $0.value }.reduce(0, +)
+    notificationsCount.compactMap { $0.value }.reduce(0, +)
   }
 
   public func reloadNotificationsCount(tokens: [OauthToken]) {
@@ -431,11 +472,11 @@ import SwiftUI
     appDefaultPostVisibility = storage.appDefaultPostVisibility
     appDefaultReplyVisibility = storage.appDefaultReplyVisibility
     appDefaultPostsSensitive = storage.appDefaultPostsSensitive
+    appRequireAltText = storage.appRequireAltText
     autoPlayVideo = storage.autoPlayVideo
     alwaysUseDeepl = storage.alwaysUseDeepl
     userDeeplAPIFree = storage.userDeeplAPIFree
     autoDetectPostLanguage = storage.autoDetectPostLanguage
-    suppressDupeReblogs = storage.suppressDupeReblogs
     inAppBrowserReaderView = storage.inAppBrowserReaderView
     hapticTabSelectionEnabled = storage.hapticTabSelectionEnabled
     hapticTimelineEnabled = storage.hapticTimelineEnabled
@@ -455,5 +496,24 @@ import SwiftUI
     shareButtonBehavior = storage.shareButtonBehavior
     pendingShownAtBottom = storage.pendingShownAtBottom
     pendingShownLeft = storage.pendingShownLeft
+    fastRefreshEnabled = storage.fastRefreshEnabled
+    maxReplyIndentation = storage.maxReplyIndentation
+    showReplyIndentation = storage.showReplyIndentation
+    showAccountPopover = storage.showAccountPopover
+    muteVideo = storage.muteVideo
+  }
+}
+
+extension UInt: RawRepresentable {
+  public var rawValue: Int {
+    Int(self)
+  }
+
+  public init?(rawValue: Int) {
+    if rawValue >= 0 {
+      self.init(rawValue)
+    } else {
+      return nil
+    }
   }
 }

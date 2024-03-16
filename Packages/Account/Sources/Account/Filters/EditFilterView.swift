@@ -70,19 +70,21 @@ struct EditFilterView: View {
     }
     .navigationTitle(filter?.title ?? NSLocalizedString("filter.new", comment: ""))
     .navigationBarTitleDisplayMode(.inline)
-    .scrollContentBackground(.hidden)
-    .scrollDismissesKeyboard(.interactively)
-    .background(theme.secondaryBackgroundColor)
-    .onAppear {
-      if filter == nil {
-        focusedField = .title
+    #if !os(visionOS)
+      .scrollContentBackground(.hidden)
+      .scrollDismissesKeyboard(.interactively)
+      .background(theme.secondaryBackgroundColor)
+    #endif
+      .onAppear {
+        if filter == nil {
+          focusedField = .title
+        }
       }
-    }
-    .toolbar {
-      ToolbarItem(placement: .navigationBarTrailing) {
-        saveButton
+      .toolbar {
+        ToolbarItem(placement: .navigationBarTrailing) {
+          saveButton
+        }
       }
-    }
   }
 
   private var expirySection: some View {
@@ -104,7 +106,9 @@ struct EditFilterView: View {
           .disabled(expirySelection != .custom)
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   @ViewBuilder
@@ -118,7 +122,9 @@ struct EditFilterView: View {
           }
         }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
 
     if filter == nil, !title.isEmpty {
       Section {
@@ -138,7 +144,9 @@ struct EditFilterView: View {
         .buttonStyle(.borderedProminent)
         .transition(.opacity)
       }
+      #if !os(visionOS)
       .listRowBackground(theme.secondaryBackgroundColor)
+      #endif
     }
   }
 
@@ -192,7 +200,9 @@ struct EditFilterView: View {
         }
       }
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private var contextsSection: some View {
@@ -214,7 +224,9 @@ struct EditFilterView: View {
         }
         .disabled(isSavingFilter)
       }
+      #if !os(visionOS)
       .listRowBackground(theme.primaryBackgroundColor)
+      #endif
     }
   }
 
@@ -235,12 +247,19 @@ struct EditFilterView: View {
       }
       .pickerStyle(.inline)
     }
+    #if !os(visionOS)
     .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 
   private var saveButton: some View {
     Button {
       Task {
+        if !newKeyword.isEmpty {
+          await addKeyword(name: newKeyword)
+          newKeyword = ""
+          focusedField = .newKeyword
+        }
         await saveFilter()
         dismiss()
       }

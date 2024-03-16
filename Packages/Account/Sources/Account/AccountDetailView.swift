@@ -3,14 +3,14 @@ import EmojiText
 import Env
 import Models
 import Network
-import Shimmer
-import Status
+import StatusKit
 import SwiftUI
 
 @MainActor
 public struct AccountDetailView: View {
   @Environment(\.openURL) private var openURL
   @Environment(\.redactionReasons) private var reasons
+  @Environment(\.openWindow) private var openWindow
 
   @Environment(StreamWatcher.self) private var watcher
   @Environment(CurrentAccount.self) private var currentAccount
@@ -22,13 +22,10 @@ public struct AccountDetailView: View {
 
   @State private var viewModel: AccountDetailViewModel
   @State private var isCurrentUser: Bool = false
-  @State private var isCreateListAlertPresented: Bool = false
-  @State private var createListTitle: String = ""
   @State private var showBlockConfirmation: Bool = false
-
-  @State private var isEditingAccount: Bool = false
-  @State private var isEditingFilters: Bool = false
   @State private var isEditingRelationshipNote: Bool = false
+
+  @State private var displayTitle: Bool = false
 
   @Binding var scrollToTopSignal: Int
 
@@ -47,10 +44,12 @@ public struct AccountDetailView: View {
   public var body: some View {
     ScrollViewReader { proxy in
       List {
+        ScrollToView()
+          .onAppear { displayTitle = false }
+          .onDisappear { displayTitle = true }
         makeHeaderView(proxy: proxy)
           .applyAccountDetailsRowStyle(theme: theme)
           .padding(.bottom, -20)
-          .id(ScrollToView.Constants.scrollToTop)
         familiarFollowers
           .applyAccountDetailsRowStyle(theme: theme)
         featuredTagsView
@@ -60,9 +59,15 @@ public struct AccountDetailView: View {
           ForEach(isCurrentUser ? AccountDetailViewModel.Tab.currentAccountTabs : AccountDetailViewModel.Tab.accountTabs,
                   id: \.self)
           { tab in
-            Image(systemName: tab.iconName)
-              .tag(tab)
-              .accessibilityLabel(tab.accessibilityLabel)
+            if tab == .boosts {
+              Image("Rocket")
+                .tag(tab)
+                .accessibilityLabel(tab.accessibilityLabel)
+            } else {
+              Image(systemName: tab.iconName)
+                .tag(tab)
+                .accessibilityLabel(tab.accessibilityLabel)
+            }
           }
         }
         .pickerStyle(.segmented)
@@ -70,29 +75,24 @@ public struct AccountDetailView: View {
         .applyAccountDetailsRowStyle(theme: theme)
         .id("status")
 
-        switch viewModel.tabState {
-        case .statuses:
-          if viewModel.selectedTab == .statuses {
-            pinnedPostsView
-          }
-          StatusesListView(fetcher: viewModel,
-                           client: client,
-                           routerPath: routerPath)
-        case .followedTags:
-          tagsListView
-        case .lists:
-          listsListView
+        if viewModel.selectedTab == .statuses {
+          pinnedPostsView
         }
+        StatusesListView(fetcher: viewModel,
+                         client: client,
+                         routerPath: routerPath)
       }
       .environment(\.defaultMinListRowHeight, 1)
       .listStyle(.plain)
-      .scrollContentBackground(.hidden)
-      .background(theme.primaryBackgroundColor)
-      .onChange(of: scrollToTopSignal) {
-        withAnimation {
-          proxy.scrollTo(ScrollToView.Constants.scrollToTop, anchor: .top)
+      #if !os(visionOS)
+        .scrollContentBackground(.hidden)
+        .background(theme.primaryBackgroundColor)
+      #endif
+        .onChange(of: scrollToTopSignal) {
+          withAnimation {
+            proxy.scrollTo(ScrollToView.Constants.scrollToTop, anchor: .top)
+          }
         }
-      }
     }
     .onAppear {
       guard reasons != .placeholder else { return }
@@ -107,7 +107,7 @@ public struct AccountDetailView: View {
           group.addTask { await viewModel.fetchAccount() }
           group.addTask {
             if await viewModel.statuses.isEmpty {
-              await viewModel.fetchNewestStatuses()
+              await viewModel.fetchNewestStatuses(pullToRefresh: false)
             }
           }
           if !viewModel.isCurrentUser {
@@ -121,7 +121,7 @@ public struct AccountDetailView: View {
         SoundEffectManager.shared.playSound(.pull)
         HapticManager.shared.fireHaptic(.dataRefresh(intensity: 0.3))
         await viewModel.fetchAccount()
-        await viewModel.fetchNewestStatuses()
+        await viewModel.fetchNewestStatuses(pullToRefresh: true)
         HapticManager.shared.fireHaptic(.dataRefresh(intensity: 0.7))
         SoundEffectManager.shared.playSound(.refresh)
       }
@@ -133,20 +133,14 @@ public struct AccountDetailView: View {
         viewModel.handleEvent(event: latestEvent, currentAccount: currentAccount)
       }
     }
-    .onChange(of: isEditingAccount) { _, newValue in
-      if !newValue {
+    .onChange(of: routerPath.presentedSheet) { oldValue, newValue in
+      if oldValue == .accountEditInfo || newValue == .accountEditInfo {
         Task {
           await viewModel.fetchAccount()
           await preferences.refreshServerPreferences()
         }
       }
     }
-    .sheet(isPresented: $isEditingAccount, content: {
-      EditAccountView()
-    })
-    .sheet(isPresented: $isEditingFilters, content: {
-      FiltersListView()
-    })
     .sheet(isPresented: $isEditingRelationshipNote, content: {
       EditRelationshipNoteView(accountDetailViewModel: viewModel)
     })
@@ -214,11 +208,12 @@ public struct AccountDetailView: View {
               Button {
                 routerPath.navigate(to: .accountDetailWithAccount(account: account))
               } label: {
-                AvatarView(account: account, config: .badge)
+                AvatarView(account.avatar, config: .badge)
                   .padding(.leading, -4)
                   .accessibilityLabel(account.safeDisplayName)
-
-              }.accessibilityAddTraits(.isImage)
+              }
+              .accessibilityAddTraits(.isImage)
+              .buttonStyle(.plain)
             }
           }
           .padding(.leading, .layoutPadding + 4)
@@ -229,86 +224,31 @@ public struct AccountDetailView: View {
     }
   }
 
-  private var tagsListView: some View {
-    Group {
-      ForEach(currentAccount.sortedTags) { tag in
-        HStack {
-          TagRowView(tag: tag)
-          Spacer()
-          Image(systemName: "chevron.right")
-        }
-        .listRowBackground(theme.primaryBackgroundColor)
-      }
-    }.task {
-      await currentAccount.fetchFollowedTags()
-    }
-  }
-
-  private var listsListView: some View {
-    Group {
-      ForEach(currentAccount.sortedLists) { list in
-        NavigationLink(value: RouterDestination.list(list: list)) {
-          Text(list.title)
-            .font(.scaledHeadline)
-            .foregroundColor(theme.labelColor)
-        }
-        .listRowBackground(theme.primaryBackgroundColor)
-        .contextMenu {
-          Button("account.list.delete", role: .destructive) {
-            Task {
-              await currentAccount.deleteList(list: list)
-            }
-          }
-        }
-      }
-      Button("account.list.create") {
-        isCreateListAlertPresented = true
-      }
-      .tint(theme.tintColor)
-      .buttonStyle(.borderless)
-      .listRowBackground(theme.primaryBackgroundColor)
-    }
-    .task {
-      await currentAccount.fetchLists()
-    }
-    .alert("account.list.create", isPresented: $isCreateListAlertPresented) {
-      TextField("account.list.name", text: $createListTitle)
-      Button("action.cancel") {
-        isCreateListAlertPresented = false
-        createListTitle = ""
-      }
-      Button("account.list.create.confirm") {
-        guard !createListTitle.isEmpty else { return }
-        isCreateListAlertPresented = false
-        Task {
-          await currentAccount.createList(title: createListTitle)
-          createListTitle = ""
-        }
-      }
-    } message: {
-      Text("account.list.create.description")
-    }
-  }
-
   @ViewBuilder
   private var pinnedPostsView: some View {
     if !viewModel.pinned.isEmpty {
       Label("account.post.pinned", systemImage: "pin.fill")
         .accessibilityAddTraits(.isHeader)
         .font(.scaledFootnote)
-        .foregroundColor(.gray)
+        .foregroundStyle(.secondary)
         .fontWeight(.semibold)
         .listRowInsets(.init(top: 0,
                              leading: 12,
                              bottom: 0,
                              trailing: .layoutPadding))
         .listRowSeparator(.hidden)
+      #if !os(visionOS)
         .listRowBackground(theme.primaryBackgroundColor)
+      #endif
       ForEach(viewModel.pinned) { status in
         StatusRowView(viewModel: .init(status: status, client: client, routerPath: routerPath))
       }
       Rectangle()
+      #if os(visionOS)
+        .fill(Color.clear)
+      #else
         .fill(theme.secondaryBackgroundColor)
+      #endif
         .frame(height: 12)
         .listRowInsets(.init())
         .listRowSeparator(.hidden)
@@ -318,12 +258,26 @@ public struct AccountDetailView: View {
 
   @ToolbarContentBuilder
   private var toolbarContent: some ToolbarContent {
+    ToolbarItem(placement: .principal) {
+      if let account = viewModel.account, displayTitle {
+        VStack {
+          Text(account.displayName ?? "").font(.headline)
+          Text("account.detail.featured-tags-n-posts \(account.statusesCount ?? 0)")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+      }
+    }
     ToolbarItemGroup(placement: .navigationBarTrailing) {
       if !viewModel.isCurrentUser {
         Button {
           if let account = viewModel.account {
-            routerPath.presentedSheet = .mentionStatusEditor(account: account,
-                                                             visibility: preferences.postVisibility)
+            #if targetEnvironment(macCatalyst) || os(visionOS)
+              openWindow(value: WindowDestinationEditor.mentionStatusEditor(account: account, visibility: preferences.postVisibility))
+            #else
+              routerPath.presentedSheet = .mentionStatusEditor(account: account,
+                                                               visibility: preferences.postVisibility)
+            #endif
           }
         } label: {
           Image(systemName: "arrowshape.turn.up.left")
@@ -343,7 +297,7 @@ public struct AccountDetailView: View {
 
         if isCurrentUser {
           Button {
-            isEditingAccount = true
+            routerPath.presentedSheet = .accountEditInfo
           } label: {
             Label("account.action.edit-info", systemImage: "pencil")
           }
@@ -358,7 +312,7 @@ public struct AccountDetailView: View {
 
           if currentInstance.isFiltersSupported {
             Button {
-              isEditingFilters = true
+              routerPath.presentedSheet = .accountFiltersList
             } label: {
               Label("account.action.edit-filters", systemImage: "line.3.horizontal.decrease.circle")
             }
@@ -405,9 +359,7 @@ public struct AccountDetailView: View {
             Task {
               do {
                 viewModel.relationship = try await client.post(endpoint: Accounts.block(id: account.id))
-              } catch {
-                print("Error while blocking: \(error.localizedDescription)")
-              }
+              } catch {}
             }
           }
         }
@@ -419,10 +371,13 @@ public struct AccountDetailView: View {
 }
 
 extension View {
+  @MainActor
   func applyAccountDetailsRowStyle(theme: Theme) -> some View {
     listRowInsets(.init())
       .listRowSeparator(.hidden)
+    #if !os(visionOS)
       .listRowBackground(theme.primaryBackgroundColor)
+    #endif
   }
 }
 

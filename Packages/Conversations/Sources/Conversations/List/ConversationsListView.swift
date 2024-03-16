@@ -2,7 +2,6 @@ import DesignSystem
 import Env
 import Models
 import Network
-import Shimmer
 import SwiftUI
 
 @MainActor
@@ -49,9 +48,9 @@ public struct ConversationsListView: View {
                 Divider()
               }
             } else if conversations.isEmpty, !viewModel.isLoadingFirstPage, !viewModel.isError {
-              EmptyView(iconName: "tray",
-                        title: "conversations.empty.title",
-                        message: "conversations.empty.message")
+              PlaceholderView(iconName: "tray",
+                              title: "conversations.empty.title",
+                              message: "conversations.empty.message")
             } else if viewModel.isError {
               ErrorView(title: "conversations.error.title",
                         message: "conversations.error.message",
@@ -81,16 +80,12 @@ public struct ConversationsListView: View {
         }
         .padding(.top, .layoutPadding)
       }
+      #if !os(visionOS)
       .scrollContentBackground(.hidden)
       .background(theme.primaryBackgroundColor)
+      #endif
       .navigationTitle("conversations.navigation-title")
       .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        StatusEditorToolbarItem(visibility: .direct)
-        if UIDevice.current.userInterfaceIdiom == .pad, !preferences.showiPadSecondaryColumn {
-          SecondaryColumnToolbarItem()
-        }
-      }
       .onChange(of: watcher.latestEvent?.id) {
         if let latestEvent = watcher.latestEvent {
           viewModel.handleEvent(event: latestEvent)

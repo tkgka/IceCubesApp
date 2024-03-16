@@ -5,51 +5,67 @@ import UIKit
 public class HapticManager {
   public static let shared: HapticManager = .init()
 
+  #if os(visionOS)
+    public enum FeedbackType: Int {
+      case success, warning, error
+    }
+  #endif
+
   public enum HapticType {
     case buttonPress
     case dataRefresh(intensity: CGFloat)
-    case notification(_ type: UINotificationFeedbackGenerator.FeedbackType)
+    #if os(visionOS)
+      case notification(_ type: FeedbackType)
+    #else
+      case notification(_ type: UINotificationFeedbackGenerator.FeedbackType)
+    #endif
     case tabSelection
     case timeline
   }
 
-  private let selectionGenerator = UISelectionFeedbackGenerator()
-  private let impactGenerator = UIImpactFeedbackGenerator(style: .heavy)
-  private let notificationGenerator = UINotificationFeedbackGenerator()
+  #if !os(visionOS)
+    private let selectionGenerator = UISelectionFeedbackGenerator()
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+    private let notificationGenerator = UINotificationFeedbackGenerator()
+  #endif
 
   private let userPreferences = UserPreferences.shared
 
   private init() {
-    selectionGenerator.prepare()
-    impactGenerator.prepare()
+    #if !os(visionOS)
+      selectionGenerator.prepare()
+      impactGenerator.prepare()
+    #endif
   }
 
   @MainActor
   public func fireHaptic(_ type: HapticType) {
-    guard supportsHaptics else { return }
+    #if !os(visionOS)
+      guard supportsHaptics else { return }
 
-    switch type {
-    case .buttonPress:
-      if userPreferences.hapticButtonPressEnabled {
-        impactGenerator.impactOccurred()
+      switch type {
+      case .buttonPress:
+        if userPreferences.hapticButtonPressEnabled {
+          impactGenerator.impactOccurred()
+        }
+      case let .dataRefresh(intensity):
+        if userPreferences.hapticTimelineEnabled {
+          impactGenerator.impactOccurred(intensity: intensity)
+        }
+      case let .notification(type):
+        if userPreferences.hapticButtonPressEnabled {
+          notificationGenerator.notificationOccurred(type)
+        }
+      case .tabSelection:
+        if userPreferences.hapticTabSelectionEnabled {
+          selectionGenerator.selectionChanged()
+        }
+      case .timeline:
+        if userPreferences.hapticTimelineEnabled {
+          selectionGenerator.selectionChanged()
+        }
       }
-    case let .dataRefresh(intensity):
-      if userPreferences.hapticTimelineEnabled {
-        impactGenerator.impactOccurred(intensity: intensity)
-      }
-    case let .notification(type):
-      if userPreferences.hapticButtonPressEnabled {
-        notificationGenerator.notificationOccurred(type)
-      }
-    case .tabSelection:
-      if userPreferences.hapticTabSelectionEnabled {
-        selectionGenerator.selectionChanged()
-      }
-    case .timeline:
-      if userPreferences.hapticTimelineEnabled {
-        selectionGenerator.selectionChanged()
-      }
-    }
+    #endif
   }
 
   public var supportsHaptics: Bool {
